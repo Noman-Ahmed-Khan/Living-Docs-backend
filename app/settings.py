@@ -5,6 +5,7 @@ from typing import Optional
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Living Docs"
     API_V1_STR: str = "/api/v1"
+    DEBUG: bool = True
     
     # Security
     SECRET_KEY: str = "your-secret-key-here"  # Change in production
@@ -17,14 +18,16 @@ class Settings(BaseSettings):
     # Google Gemini
     GOOGLE_API_KEY: str
     GEMINI_MODEL: str = "gemini-1.5-flash"
-    EMBEDDING_MODEL: str = "models/embedding-001"
+    GEMINI_EMBEDDING_MODEL: str = "models/embedding-001"
     
     # Pinecone
     PINECONE_API_KEY: str
     PINECONE_INDEX_NAME: str
+    PINECONE_ENVIRONMENT: str = "gcp-starter"
     
     # Storage
     UPLOAD_DIR: str = "uploads"
+    MAX_FILE_SIZE_MB: int = 50
     
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 

@@ -16,3 +16,4 @@ openpyxl
 beautifulsoup4
 markdown
 python-dotenv
+email-validator
