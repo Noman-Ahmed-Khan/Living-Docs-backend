@@ -120,7 +120,7 @@ def _build_email_template(title: str, body: str) -> str:
 
 def send_verification_email(email: str, token: str) -> bool:
     """Send email verification email"""
-    verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
+    verification_url = f"{settings.BACKEND_URL}{settings.API_V1_STR}/auth/verify-email?token={token}"
     
     body = f"""
         <h2>Welcome!</h2>
@@ -144,7 +144,7 @@ def send_verification_email(email: str, token: str) -> bool:
 
 def send_password_reset_email(email: str, token: str) -> bool:
     """Send password reset email"""
-    reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+    reset_url = f"{settings.BACKEND_URL}{settings.API_V1_STR}/auth/reset-password?token={token}"
     
     body = f"""
         <h2>Password Reset Request</h2>
@@ -186,7 +186,7 @@ def send_password_changed_email(email: str) -> bool:
 
 def send_email_change_verification(new_email: str, token: str) -> bool:
     """Send email change verification"""
-    verification_url = f"{settings.FRONTEND_URL}/verify-email-change?token={token}"
+    verification_url = f"{settings.BACKEND_URL}{settings.API_V1_STR}/auth/verify-email?token={token}"
     
     body = f"""
         <h2>Verify Your New Email Address</h2>

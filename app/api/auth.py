@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -80,6 +81,28 @@ async def verify_email(
     crud.use_verification_token(db, token)
     
     return {"message": "Email verified successfully. You can now log in."}
+
+
+@router.get("/verify-email")
+async def verify_email_get(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Verify user's email address using the token sent via email (GET version for links)."""
+    db_token = crud.get_verification_token(db, token=token)
+    
+    if not db_token:
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/login?error=Invalid or expired verification token.")
+    
+    if db_token.token_type == "email_change" and db_token.new_email:
+        crud.update_user_email(db, db_token.user, db_token.new_email)
+        crud.use_verification_token(db, db_token)
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/login?message=Email address updated successfully.")
+    
+    crud.verify_user_email(db, db_token.user)
+    crud.use_verification_token(db, db_token)
+    
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/login?message=Email verified successfully. You can now log in.")
 
 
 @router.post("/resend-verification", response_model=auth_schema.MessageResponse)
@@ -324,6 +347,20 @@ async def reset_password(
     )
     
     return {"message": "Password has been reset successfully. Please log in with your new password."}
+
+
+@router.get("/reset-password")
+async def reset_password_get(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Verify reset token and redirect to frontend reset password form."""
+    db_token = crud.get_password_reset_token(db, token=token)
+    
+    if not db_token:
+        return RedirectResponse(url=f"{settings.FRONTEND_URL}/forgot-password?error=Invalid or expired password reset token.")
+    
+    return RedirectResponse(url=f"{settings.FRONTEND_URL}/reset-password?token={token}")
 
 
 @router.post("/change-password", response_model=auth_schema.MessageResponse)

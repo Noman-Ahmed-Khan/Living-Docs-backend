@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     
     # Application
     FRONTEND_URL: str = "http://localhost:3000"
+    BACKEND_URL: str = "http://localhost:8000"
     ALLOWED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
     
     # Security
