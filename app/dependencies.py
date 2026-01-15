@@ -5,21 +5,13 @@ from jose import JWTError, jwt
 from typing import Optional
 from uuid import UUID
 
-from app.db import crud, session, models
+from app.db.session import get_db, SessionLocal
+from app.db import crud, models
 from app.settings import settings
 from app.schemas.auth import TokenData
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
-
-
-def get_db():
-    """Database session dependency"""
-    db = session.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 async def get_current_user(

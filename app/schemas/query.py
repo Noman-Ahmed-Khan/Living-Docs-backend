@@ -1,7 +1,15 @@
 """Query-related Pydantic schemas."""
 
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+from enum import Enum
+
+
+class RetrievalStrategy(str, Enum):
+    """Available retrieval strategies."""
+    SIMILARITY = "similarity"
+    MMR = "mmr"
+    HYBRID = "hybrid"
 
 
 class Citation(BaseModel):
@@ -13,13 +21,11 @@ class Citation(BaseModel):
     page: Optional[int] = Field(None, description="Page number (if applicable)")
     char_start: Optional[int] = Field(None, description="Character start position")
     char_end: Optional[int] = Field(None, description="Character end position")
-    text_snippet: Optional[str] = Field(
-        None, 
-        description="Preview of the cited text"
-    )
+    text_snippet: Optional[str] = Field(None, description="Preview of the cited text")
+    relevance_score: Optional[float] = Field(None, description="Relevance score")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "chunk_id": "abc123",
                 "document_id": "doc456",
@@ -30,11 +36,13 @@ class Citation(BaseModel):
                 "text_snippet": "The quarterly results show..."
             }
         }
+    )
 
 
 class QueryRequest(BaseModel):
     """Request schema for document queries."""
     
+    project_id: str = Field(..., description="Project ID to query")
     question: str = Field(
         ..., 
         min_length=1, 
@@ -49,15 +57,29 @@ class QueryRequest(BaseModel):
         default=False,
         description="Include all retrieved sources in citations"
     )
+    retrieval_strategy: RetrievalStrategy = Field(
+        default=RetrievalStrategy.MMR,
+        description="Retrieval strategy to use"
+    )
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Number of chunks to retrieve"
+    )
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
+                "project_id": "proj123",
                 "question": "What are the key findings in the report?",
                 "document_ids": None,
-                "include_all_sources": False
+                "include_all_sources": False,
+                "retrieval_strategy": "mmr",
+                "top_k": 5
             }
         }
+    )
 
 
 class QueryResponse(BaseModel):
@@ -72,9 +94,10 @@ class QueryResponse(BaseModel):
         default_factory=dict,
         description="Additional response metadata"
     )
+    query_id: Optional[str] = Field(None, description="Unique query identifier")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "answer": "The key findings include... [abc123]",
                 "citations": [
@@ -91,3 +114,18 @@ class QueryResponse(BaseModel):
                 }
             }
         }
+    )
+
+
+class SimilarChunksRequest(BaseModel):
+    """Request for finding similar chunks."""
+    project_id: str
+    text: str = Field(..., min_length=1, max_length=2000)
+    top_k: int = Field(default=5, ge=1, le=50)
+    document_ids: Optional[List[str]] = None
+
+
+class SimilarChunksResponse(BaseModel):
+    """Response with similar chunks."""
+    chunks: List[Citation]
+    query_text: str

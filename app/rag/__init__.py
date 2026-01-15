@@ -31,12 +31,7 @@ from .embeddings import (
     get_embedding_service,
     get_embeddings,
 )
-from .ingestion import (
-    DocumentLoader,
-    DocumentProcessor,
-    get_document_loader,
-    load_document,
-)
+from .loaders import DocumentLoader
 from .vectorstore import (
     VectorStoreManager,
     get_vectorstore_manager,
@@ -92,9 +87,6 @@ __all__ = [
     "get_embeddings",
     # Document Loading
     "DocumentLoader",
-    "DocumentProcessor",
-    "get_document_loader",
-    "load_document",
     # Vector Store
     "VectorStoreManager",
     "get_vectorstore_manager",

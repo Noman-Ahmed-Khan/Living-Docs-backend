@@ -11,6 +11,8 @@ langchain
 langchain-community
 langchain-classic
 langchain-google-genai
+langchain-pinecone
+langchain-core
 pinecone-client
 pypdf
 python-docx

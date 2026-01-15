@@ -1,11 +1,30 @@
 import uuid
 import secrets
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Integer, Boolean, Index
+from enum import Enum as PyEnum
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Integer, Boolean, Index, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .session import Base
 
+
+# Enums
+
+class DocumentStatus(str, PyEnum):
+    """Document processing status."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ProjectStatus(str, PyEnum):
+    """Project status."""
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+# User Models
 
 class User(Base):
     __tablename__ = "users"
@@ -103,26 +122,78 @@ class PasswordResetToken(Base):
 
     user = relationship("User", back_populates="password_reset_tokens")
 
+# Project Model
 
 class Project(Base):
     __tablename__ = "projects"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    # Status
+    status = Column(
+        Enum(ProjectStatus, name="project_status"),
+        default=ProjectStatus.ACTIVE,
+        nullable=False
+    )
+    
+    # Settings (JSON-like storage for RAG config)
+    chunk_size = Column(Integer, default=1000, nullable=False)
+    chunk_overlap = Column(Integer, default=200, nullable=False)
+    
+    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # Relationships
     owner = relationship("User", back_populates="projects")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
 
+    __table_args__ = (
+        Index('idx_project_owner_status', 'owner_id', 'status'),
+    )
+
+
+# Document Model
 
 class Document(Base):
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     filename = Column(String(500), nullable=False)
+    original_filename = Column(String(500), nullable=False)
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     file_path = Column(String(1000), nullable=False)
+    
+    # File metadata
+    file_size = Column(Integer, nullable=True)  # in bytes
+    file_type = Column(String(50), nullable=True)  # extension
+    content_type = Column(String(100), nullable=True)  # MIME type
+    
+    # Processing status
+    status = Column(
+        Enum(DocumentStatus, name="document_status"),
+        default=DocumentStatus.PENDING,
+        nullable=False,
+        index=True
+    )
+    status_message = Column(Text, nullable=True)
+    
+    # Ingestion metrics
+    chunk_count = Column(Integer, default=0, nullable=False)
+    page_count = Column(Integer, nullable=True)
+    character_count = Column(Integer, nullable=True)
+    
+    # Processing timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    processed_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Relationships
     project = relationship("Project", back_populates="documents")
+
+    __table_args__ = (
+        Index('idx_document_project_status', 'project_id', 'status'),
+    )
