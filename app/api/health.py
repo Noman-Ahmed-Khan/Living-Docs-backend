@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Dict, Any
 
 from app.db.session import get_db
-from app.rag import get_vectorstore_manager
+from app.rag.vectorstore import get_vectorstore_manager
 from app.settings import settings
 
 

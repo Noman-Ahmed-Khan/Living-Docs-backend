@@ -1,6 +1,6 @@
-"""RAG Pipeline Package for Living Docs Backend."""
+"""RAG Pipeline Package."""
 
-from .config import (
+from app.rag.config import (
     RAGConfig,
     ChunkerConfig,
     RetrieverConfig,
@@ -8,7 +8,8 @@ from .config import (
     ChunkingStrategy,
     RetrievalStrategy,
 )
-from .exceptions import (
+
+from app.rag.exceptions import (
     RAGException,
     DocumentLoadError,
     ChunkingError,
@@ -17,91 +18,38 @@ from .exceptions import (
     QueryError,
     UnsupportedFileTypeError,
 )
-from .normalizers import TextNormalizer, MetadataNormalizer
-from .chunker import (
+
+from app.rag.chunker import (
     BaseChunker,
-    FixedSizeChunker,
-    RecursiveChunker,
-    SentenceChunker,
     ChunkerFactory,
     create_chunker,
 )
-from .embeddings import (
+
+from app.rag.embeddings import (
     EmbeddingService,
     get_embedding_service,
     get_embeddings,
 )
-from .loaders import DocumentLoader
-from .vectorstore import (
+
+from app.rag.loaders import (
+    DocumentLoader,
+)
+
+from app.rag.vectorstore import (
     VectorStoreManager,
     get_vectorstore_manager,
     get_vectorstore,
 )
-from .retriever import (
+
+from app.rag.retriever import (
     DocumentRetriever,
     RetrievalResult,
     create_retriever,
 )
-from .prompts import (
-    RAG_CHAT_PROMPT,
-    RAG_PROMPT,
-    get_prompt,
-)
-from .query import (
+
+from app.rag.query import (
     RAGQueryEngine,
     QueryEngineFactory,
     CitationExtractor,
     query_documents,
 )
-
-
-__all__ = [
-    # Config
-    "RAGConfig",
-    "ChunkerConfig",
-    "RetrieverConfig",
-    "QueryConfig",
-    "ChunkingStrategy",
-    "RetrievalStrategy",
-    # Exceptions
-    "RAGException",
-    "DocumentLoadError",
-    "ChunkingError",
-    "EmbeddingError",
-    "VectorStoreError",
-    "QueryError",
-    "UnsupportedFileTypeError",
-    # Normalizers
-    "TextNormalizer",
-    "MetadataNormalizer",
-    # Chunking
-    "BaseChunker",
-    "FixedSizeChunker",
-    "RecursiveChunker",
-    "SentenceChunker",
-    "ChunkerFactory",
-    "create_chunker",
-    # Embeddings
-    "EmbeddingService",
-    "get_embedding_service",
-    "get_embeddings",
-    # Document Loading
-    "DocumentLoader",
-    # Vector Store
-    "VectorStoreManager",
-    "get_vectorstore_manager",
-    "get_vectorstore",
-    # Retrieval
-    "DocumentRetriever",
-    "RetrievalResult",
-    "create_retriever",
-    # Prompts
-    "RAG_CHAT_PROMPT",
-    "RAG_PROMPT",
-    "get_prompt",
-    # Query
-    "RAGQueryEngine",
-    "QueryEngineFactory",
-    "CitationExtractor",
-    "query_documents",
-]

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
-
+from uuid import UUID
 
 class DocumentStatus(str, Enum):
     """Document processing status."""
@@ -23,7 +23,7 @@ class DocumentCreate(BaseModel):
     """Internal schema for creating a document."""
     filename: str
     original_filename: str
-    project_id: str
+    project_id: UUID
     file_path: str
     file_size: Optional[int] = None
     file_type: Optional[str] = None
@@ -42,10 +42,10 @@ class DocumentUpdate(BaseModel):
 
 class Document(BaseModel):
     """Document response schema."""
-    id: str
+    id: UUID
     filename: str
     original_filename: str
-    project_id: str
+    project_id: UUID
     file_size: Optional[int] = None
     file_type: Optional[str] = None
     status: DocumentStatus
@@ -84,7 +84,7 @@ class DocumentList(BaseModel):
 
 class DocumentIngestionStatus(BaseModel):
     """Document ingestion status details."""
-    document_id: str
+    document_id: UUID
     status: DocumentStatus
     message: Optional[str] = None
     progress: Optional[float] = None  # 0.0 to 1.0

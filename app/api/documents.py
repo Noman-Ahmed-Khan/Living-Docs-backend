@@ -25,7 +25,7 @@ from app.schemas import document as document_schema
 from app.dependencies import get_current_user
 from app.settings import settings
 from app.services.ingestion import get_ingestion_service
-from app.rag import DocumentLoader
+from app.rag.loaders import DocumentLoader
 
 
 logger = logging.getLogger(__name__)

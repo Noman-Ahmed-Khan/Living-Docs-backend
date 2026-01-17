@@ -9,11 +9,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db import crud, models
-from app.rag import (
-    DocumentLoader,
-    create_chunker,
-    get_vectorstore_manager,
-    ChunkingStrategy,
+from app.rag.loaders import DocumentLoader
+from app.rag.chunker import create_chunker
+from app.rag.vectorstore import get_vectorstore_manager
+from app.rag.config import ChunkingStrategy
+from app.rag.exceptions import (
     DocumentLoadError,
     ChunkingError,
     VectorStoreError,

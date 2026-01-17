@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Test Template</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; max-width: 600px; }
+        .field { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+        input[type="text"], input[type="file"] { width: 100%; padding: 0.5rem; }
+        button { padding: 0.75rem 1.5rem; background: #007bff; color: white; border: none; cursor: pointer; }
+        pre { background: #f4f4f4; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Document Upload Test</h1>
+    
+    <div class="field">
+        <label for="token">Auth Bearer Token</label>
+        <input type="text" id="token" placeholder="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+    </div>
+
+    <div class="field">
+        <label for="projectId">Project ID (UUID)</label>
+        <input type="text" id="projectId" placeholder="00000000-0000-0000-0000-000000000000">
+    </div>
+
+    <div class="field">
+        <label for="file">Select Document</label>
+        <input type="file" id="file">
+    </div>
+
+    <button onclick="uploadFile()">Upload Document</button>
+
+    <h3>Response:</h3>
+    <pre id="response">Waiting for action...</pre>
+
+    <script>
+        async function uploadFile() {
+            const token = document.getElementById('token').value.trim();
+            const projectId = document.getElementById('projectId').value.trim();
+            const fileInput = document.getElementById('file');
+            const responseElement = document.getElementById('response');
+
+            if (!token || !projectId || !fileInput.files[0]) {
+                alert('Please fill all fields');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('project_id', projectId);
+            formData.append('file', fileInput.files[0]);
+            formData.append('process_immediately', 'true');
+
+            responseElement.textContent = 'Uploading...';
+
+            try {
+                const response = await fetch('/api/v1/documents/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+                responseElement.textContent = JSON.stringify(result, null, 2);
+            } catch (error) {
+                responseElement.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

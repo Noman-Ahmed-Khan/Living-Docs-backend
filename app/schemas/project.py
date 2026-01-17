@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
-
+from uuid import UUID
 
 class ProjectStatus(str, Enum):
     """Project status enum."""
@@ -45,8 +45,8 @@ class ProjectStats(BaseModel):
 
 class Project(ProjectBase):
     """Project response schema."""
-    id: str
-    owner_id: str
+    id: UUID
+    owner_id: UUID
     status: ProjectStatus
     chunk_size: int
     chunk_overlap: int

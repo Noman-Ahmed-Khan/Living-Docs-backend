@@ -1,7 +1,8 @@
-"""RAG Query Engine using LangChain Expression Language (LCEL)."""
+"""RAG Query Engine using LangChain Expression Language (LCEL) with Hugging Face."""
 
 import re
 import logging
+import uuid
 from typing import List, Dict, Any, Optional, Set
 from dataclasses import dataclass, field
 
@@ -133,15 +134,23 @@ class RAGQueryEngine:
         self.llm = self._create_llm()
         self.chain = self._build_chain()
     
-    def _create_llm(self) -> ChatGoogleGenerativeAI:
+    def _create_llm(self):
         """Create configured LLM instance."""
-        return ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL,
-            google_api_key=settings.GOOGLE_API_KEY,
+        logger.info(f"Initializing Hugging Face LLM with model: {settings.HUGGINGFACE_LLM_MODEL}")
+        
+        # Base endpoint
+        llm_endpoint = HuggingFaceEndpoint(
+            repo_id=settings.HUGGINGFACE_LLM_MODEL,
+            huggingfacehub_api_token=settings.HUGGINGFACE_API_KEY,
+            task="conversational",
             temperature=self.query_config.temperature,
-            max_output_tokens=self.query_config.max_tokens
+            max_new_tokens=self.query_config.max_tokens,
+            timeout=300
         )
-    
+        
+        # Wrap for chat-style usage (better for instruct models)
+        return ChatHuggingFace(llm=llm_endpoint)
+
     def _build_chain(self):
         """Build the LCEL chain for query processing."""
         prompt = get_prompt("rag")
@@ -235,7 +244,8 @@ class RAGQueryEngine:
                 metadata={
                     "retrieval_strategy": retrieval_result.strategy.value,
                     "documents_retrieved": len(documents),
-                    "scores": retrieval_result.scores[:5] if retrieval_result.scores else []
+                    "scores": retrieval_result.scores[:5] if retrieval_result.scores else [],
+                    "model": settings.LLM_MODEL
                 }
             )
             

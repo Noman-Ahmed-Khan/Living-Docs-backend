@@ -1,4 +1,4 @@
-"""Embedding generation with caching and error handling."""
+"""Embedding generation with Hugging Face."""
 
 import logging
 import hashlib
@@ -28,23 +28,20 @@ class EmbeddingService:
     def __init__(
         self,
         model: Optional[str] = None,
-        api_key: Optional[str] = None,
         cache_enabled: bool = True
     ):
-        self.model = model or settings.EMBEDDING_MODEL
-        self.api_key = api_key or settings.GOOGLE_API_KEY
+        self.model = model or settings.HUGGINGFACE_EMBEDDING_MODEL
         self.cache_enabled = cache_enabled
         self._embeddings_model = None
         self._cache = {}
     
     @property
-    def embeddings_model(self) -> GoogleGenerativeAIEmbeddings:
+    def embeddings_model(self) -> HuggingFaceEmbeddings:
         """Lazy initialization of embeddings model."""
         if self._embeddings_model is None:
-            self._embeddings_model = GoogleGenerativeAIEmbeddings(
-                model=self.model,
-                google_api_key=self.api_key,
-                task_type="retrieval_document"
+            logger.info(f"Initializing Hugging Face embeddings with model: {self.model}")
+            self._embeddings_model = HuggingFaceEmbeddings(
+                model_name=self.model
             )
         return self._embeddings_model
     
@@ -79,13 +76,8 @@ class EmbeddingService:
                     logger.debug("Embedding cache hit")
                     return self._cache[cache_key]
             
-            # Generate embedding with query-specific task type
-            model = GoogleGenerativeAIEmbeddings(
-                model=self.model,
-                google_api_key=self.api_key,
-                task_type="retrieval_query"
-            )
-            embedding = model.embed_query(text)
+            # Generate embedding
+            embedding = self.embeddings_model.embed_query(text)
             
             # Cache result
             if self.cache_enabled:
@@ -153,7 +145,7 @@ def get_embedding_service() -> EmbeddingService:
     return _embedding_service
 
 
-def get_embeddings() -> GoogleGenerativeAIEmbeddings:
+def get_embeddings() -> HuggingFaceEmbeddings:
     """
     Get embeddings model for LangChain integration.
     

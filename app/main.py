@@ -1,7 +1,9 @@
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 
 from app.api import auth, users, projects, documents, query, health
 from app.db.session import engine, Base, SessionLocal
@@ -102,6 +104,15 @@ app.include_router(
     prefix="/health", 
     tags=["health"]
 )
+
+
+@app.get("/test-upload", response_class=HTMLResponse)
+async def get_test_upload():
+    """Endpoint for testing document uploads."""
+    template_path = Path("app/templates/test_upload.html")
+    if not template_path.exists():
+        return HTMLResponse(content="Template not found", status_code=404)
+    return template_path.read_text()
 
 
 @app.get("/")

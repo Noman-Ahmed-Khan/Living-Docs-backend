@@ -11,13 +11,9 @@ from sqlalchemy.orm import Session
 from app.db import crud, session, models
 from app.schemas import query as query_schema
 from app.dependencies import get_current_user
-from app.rag import (
-    RAGQueryEngine,
-    QueryError,
-    RetrieverConfig,
-    RetrievalStrategy,
-    QueryConfig,
-)
+from app.rag.query import RAGQueryEngine
+from app.rag.exceptions import QueryError
+from app.rag.config import RetrieverConfig, RetrievalStrategy, QueryConfig
 
 
 logger = logging.getLogger(__name__)
@@ -166,7 +162,8 @@ async def find_similar_chunks(
         )
     
     try:
-        from app.rag import create_retriever, RetrievalStrategy
+        from app.rag.retriever import create_retriever
+        from app.rag.config import RetrievalStrategy
         
         retriever = create_retriever(
             project_id=request.project_id,

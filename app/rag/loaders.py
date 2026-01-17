@@ -1,4 +1,5 @@
 from typing import List
+import os
 from langchain_community.document_loaders import (
     PyPDFLoader,
     UnstructuredWordDocumentLoader,
@@ -8,7 +9,6 @@ from langchain_community.document_loaders import (
     BSHTMLLoader
 )
 from langchain_core.documents import Document
-import os
 
 class DocumentLoader:
     @staticmethod
