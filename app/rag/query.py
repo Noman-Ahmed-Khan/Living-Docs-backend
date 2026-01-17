@@ -2,11 +2,13 @@
 
 import re
 import logging
-import uuid
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import List, Dict, Any, Optional, Set
 from dataclasses import dataclass, field
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.documents import Document
@@ -20,6 +22,9 @@ from .exceptions import QueryError
 
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for running sync operations
+_executor = ThreadPoolExecutor(max_workers=4)
 
 
 @dataclass
@@ -142,13 +147,13 @@ class RAGQueryEngine:
         llm_endpoint = HuggingFaceEndpoint(
             repo_id=settings.HUGGINGFACE_LLM_MODEL,
             huggingfacehub_api_token=settings.HUGGINGFACE_API_KEY,
-            task="conversational",
+            task="text-generation",
             temperature=self.query_config.temperature,
             max_new_tokens=self.query_config.max_tokens,
             timeout=300
         )
         
-        # Wrap for chat-style usage (better for instruct models)
+        # Wrap for chat-style usage
         return ChatHuggingFace(llm=llm_endpoint)
 
     def _build_chain(self):
@@ -178,6 +183,39 @@ class RAGQueryEngine:
             context_parts.append(f"{header}\n{doc.page_content}")
         
         return "\n\n---\n\n".join(context_parts)
+    
+    def _invoke_chain_sync(self, context: str, question: str) -> str:
+        """Synchronously invoke the chain (to be run in executor)."""
+        try:
+            return self.chain.invoke({
+                "context": context,
+                "question": question
+            })
+        except StopIteration:
+            # Re-raise as RuntimeError to avoid asyncio Future issues
+            # This happens in some LangChain components when internal iterators exhaust
+            logger.error("LLM chain raised StopIteration, converting to RuntimeError")
+            raise RuntimeError("LLM chain raised StopIteration")
+        except Exception as e:
+            logger.error(f"Error in LLM chain invocation: {e}")
+            raise
+    
+    async def _invoke_chain_async(self, context: str, question: str) -> str:
+        """
+        Invoke the chain asynchronously using a thread executor.
+        
+        This avoids the 'coroutine raised StopIteration' error that occurs
+        when some LangChain components don't properly support async.
+        """
+        loop = asyncio.get_running_loop()
+        
+        # Run the synchronous invoke in a thread pool
+        response = await loop.run_in_executor(
+            _executor,
+            partial(self._invoke_chain_sync, context, question)
+        )
+        
+        return response
     
     async def query(
         self,
@@ -221,11 +259,8 @@ class RAGQueryEngine:
             # 3. Format context
             context = self._format_context(documents)
             
-            # 4. Generate response
-            response = await self.chain.ainvoke({
-                "context": context,
-                "question": question
-            })
+            # 4. Generate response using executor to avoid StopIteration issues
+            response = await self._invoke_chain_async(context, question)
             
             # 5. Extract citations
             if include_all_sources:
@@ -250,7 +285,7 @@ class RAGQueryEngine:
             )
             
         except Exception as e:
-            logger.error(f"Query processing failed: {e}")
+            logger.error(f"Query processing failed: {e}", exc_info=True)
             raise QueryError(
                 "Failed to process query",
                 details={"question": question, "error": str(e)}

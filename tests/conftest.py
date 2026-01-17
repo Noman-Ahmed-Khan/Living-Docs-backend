@@ -4,10 +4,8 @@ from unittest.mock import MagicMock
 # Mock problematic dependencies that are not needed for auth tests
 mock_modules = [
     "langchain_pinecone", 
-    "langchain_google_genai", 
+    "langchain_huggingface", 
     "pinecone", 
-    "google.genai",
-    "google.generativeai"
 ]
 for module in mock_modules:
     sys.modules[module] = MagicMock()

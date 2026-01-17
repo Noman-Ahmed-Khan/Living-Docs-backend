@@ -10,10 +10,14 @@ pydantic[email]
 langchain
 langchain-community
 langchain-classic
-langchain-google-genai
+huggingface_hub>=0.20.0
+langchain-huggingface>=0.0.3
+requests
+langchain-text-splitters
 langchain-pinecone
 langchain-core
-pinecone-client
+pincone
+pinecone-client==3.0.2
 pypdf
 python-docx
 python-pptx
@@ -28,3 +32,4 @@ aiosmtplib
 alembic 
 pytest
 httpx
+sentence_transformers

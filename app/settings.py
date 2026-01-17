@@ -33,9 +33,7 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8000"
     
-    # ===========================================
     # DATABASE SETTINGS
-    # ===========================================
     DATABASE_URL: Optional[str] = None
     
     # Database Pool Settings
@@ -44,10 +42,8 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 1800
     
-    # ===========================================
     # SECURITY / AUTH SETTINGS
-    # ===========================================
-    SECRET_KEY: str = "your-secret-key-here"
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -60,9 +56,7 @@ class Settings(BaseSettings):
     PASSWORD_MIN_LENGTH: int = 8
     REQUIRE_EMAIL_VERIFICATION: bool = False
     
-    # ===========================================
     # EMAIL SETTINGS
-    # ===========================================
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = None
@@ -73,10 +67,10 @@ class Settings(BaseSettings):
     SMTP_SSL: bool = False
     EMAIL_TEMPLATES_DIR: str = "app/templates/email"
     
-    # Google Gemini
-    GOOGLE_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-1.5-flash"
-    GEMINI_EMBEDDING_MODEL: str = "models/embedding-001"
+    # Hugging Face
+    HUGGINGFACE_API_KEY: Optional[str] = None
+    HUGGINGFACE_LLM_MODEL: str = "bigscience/bloom-560m"
+    HUGGINGFACE_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     
     # PINECONE VECTOR DATABASE SETTINGS
     PINECONE_API_KEY: Optional[str] = None
@@ -145,9 +139,7 @@ class Settings(BaseSettings):
         """Check if RAG is fully configured."""
         return bool(self.HUGGINGFACE_API_KEY and self.PINECONE_API_KEY)
     
-    # ===========================================
     # VALIDATORS
-    # ===========================================
     
     @field_validator("DEFAULT_RETRIEVAL_STRATEGY")
     @classmethod

@@ -7,12 +7,12 @@ A production-ready AI documentation system with explainable RAG and precise cita
 - JWT-based authentication
 - Document ingestion for PDF, DOCX, PPTX, XLSX, MD, HTML
 - Character-level citation tracking
-- RAG pipeline using LangChain, Google Gemini, and Pinecone
+- RAG pipeline using LangChain, Hugging Face, and Pinecone
 
 ## Prerequisites
 - Python 3.11+
-- Google Gemini API Key
-- Pinecone API Key and Index (1536 dimensions for Gemini embeddings)
+- Hugging Face API Key
+- Pinecone API Key and Index (384 dimensions for Hugging Face embeddings)
 
 ## Setup
 
@@ -24,7 +24,7 @@ A production-ready AI documentation system with explainable RAG and precise cita
 2. **Environment Variables**
    Create a `.env` file in the root directory:
    ```env
-   GOOGLE_API_KEY=your_gemini_api_key
+   HUGGINGFACE_API_KEY=your_hf_api_key
    PINECONE_API_KEY=your_pinecone_api_key
    PINECONE_INDEX_NAME=your_pinecone_index_name
    SECRET_KEY=your_secret_key_for_jwt
@@ -45,11 +45,11 @@ Once the server is running, visit:
 1. **Upload**: Files are saved to the `uploads/` directory.
 2. **Load**: `DocumentLoader` extracts text from various file formats.
 3. **Chunk**: `Chunker` splits text into 1000-character segments with 100-character overlap, preserving offsets.
-4. **Embed**: `GoogleGenerativeAIEmbeddings` generates vectors.
+4. **Embed**: `HuggingFaceEmbeddings` generates vectors.
 5. **Store**: Vectors are stored in Pinecone using the `project_id` as the namespace.
 
 ## Query Pipeline
 1. **Retrieve**: Similarity search in Pinecone within the project's namespace.
 2. **Prompt**: System prompt enforces strict context-only answering and citation format.
-3. **Answer**: Gemini generates the response with embedded chunk IDs.
+3. **Answer**: Hugging Face LLM generates the response with embedded chunk IDs.
 4. **Citations**: Metadata for all retrieved chunks is returned for frontend highlighting.

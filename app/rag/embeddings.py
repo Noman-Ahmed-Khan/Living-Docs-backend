@@ -5,7 +5,7 @@ import hashlib
 from typing import List, Optional
 from functools import lru_cache
 
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from tenacity import (
     retry,
     stop_after_attempt,
