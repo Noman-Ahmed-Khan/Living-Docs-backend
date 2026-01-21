@@ -67,20 +67,10 @@ class QueryRequest(BaseModel):
         le=20,
         description="Number of chunks to retrieve"
     )
-    
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "project_id": "proj123",
-                "question": "What are the key findings in the report?",
-                "document_ids": None,
-                "include_all_sources": False,
-                "retrieval_strategy": "mmr",
-                "top_k": 5
-            }
-        }
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Optional chat session ID to associate this query with"
     )
-
 
 class QueryResponse(BaseModel):
     """Response schema for document queries."""

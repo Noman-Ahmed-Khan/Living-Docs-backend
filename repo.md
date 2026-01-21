@@ -24,6 +24,86 @@ The project follows a modular FastAPI structure:
 - **tests/**: Automated tests using `pytest`.
 - **uploads/**: Local storage for uploaded documents.
 
+## Project Model/Schema
+The following diagram illustrates the core data models and their relationships:
+
+```mermaid
+erDiagram
+    USER ||--o{ PROJECT : "owns"
+    USER ||--o{ REFRESH_TOKEN : "has"
+    USER ||--o{ VERIFICATION_TOKEN : "has"
+    USER ||--o{ PASSWORD_RESET_TOKEN : "has"
+    PROJECT ||--o{ DOCUMENT : "contains"
+
+    USER {
+        uuid id PK
+        string email
+        string hashed_password
+        boolean is_active
+        boolean is_verified
+        boolean is_superuser
+        datetime created_at
+        datetime updated_at
+    }
+
+    PROJECT {
+        uuid id PK
+        string name
+        string description
+        uuid owner_id FK
+        enum status
+        int chunk_size
+        int chunk_overlap
+        datetime created_at
+        datetime updated_at
+    }
+
+    DOCUMENT {
+        uuid id PK
+        string filename
+        string original_filename
+        uuid project_id FK
+        string file_path
+        int file_size
+        string file_type
+        enum status
+        int chunk_count
+        datetime created_at
+        datetime updated_at
+    }
+
+    REFRESH_TOKEN {
+        uuid id PK
+        string token
+        uuid user_id FK
+        datetime expires_at
+        boolean is_revoked
+    }
+
+    VERIFICATION_TOKEN {
+        uuid id PK
+        string token
+        uuid user_id FK
+        string token_type
+        boolean is_used
+        datetime expires_at
+    }
+
+    PASSWORD_RESET_TOKEN {
+        uuid id PK
+        string token
+        uuid user_id FK
+        boolean is_used
+        datetime expires_at
+    }
+```
+
+### Entity Relationships
+- **User**: The central entity. A user owns multiple projects and maintains various security tokens (Refresh, Verification, Password Reset).
+- **Project**: A container for documentation related to a specific domain or use case. Each project belongs to exactly one user. It defines RAG configuration parameters like `chunk_size` and `chunk_overlap`.
+- **Document**: Individual files uploaded to a project. Documents go through a lifecycle (Pending -> Processing -> Completed/Failed). They are associated with a single project and stripped of their content into vector embeddings during processing.
+- **Tokens**: Auxiliary models for managing authentication state and security flows (email verification and password recovery).
+
 ## Endpoints
 
 ### Authentication (`/api/v1/auth`)

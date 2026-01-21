@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
 
-from app.api import auth, users, projects, documents, query, health
+from app.api import auth, users, projects, documents, query, health, chat
 from app.db.session import engine, Base, SessionLocal
 from app.db import crud
 from app.settings import settings
@@ -98,6 +98,11 @@ app.include_router(
     query.router, 
     prefix=f"{settings.API_V1_STR}/query", 
     tags=["query"]
+)
+app.include_router(
+    chat.router, 
+    prefix=f"{settings.API_V1_STR}/chat", 
+    tags=["chat"]
 )
 app.include_router(
     health.router, 

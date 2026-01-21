@@ -150,6 +150,7 @@ class Project(Base):
     # Relationships
     owner = relationship("User", back_populates="projects")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
+    chat_sessions = relationship("ChatSession", back_populates="project", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index('idx_project_owner_status', 'owner_id', 'status'),
@@ -196,4 +197,63 @@ class Document(Base):
 
     __table_args__ = (
         Index('idx_document_project_status', 'project_id', 'status'),
+    )
+
+# Chat Models
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    title = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_message_at = Column(DateTime(timezone=True), nullable=True)
+
+    project = relationship("Project", back_populates="chat_sessions")
+    user = relationship("User")
+    messages = relationship(
+        "ChatMessage",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="ChatMessage.created_at.asc()",
+    )
+
+    __table_args__ = (
+        Index("idx_chat_session_user_project", "user_id", "project_id"),
+    )
+
+
+class ChatMessageRole(str, PyEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
+
+    role = Column(
+        Enum(ChatMessageRole, name="chat_message_role"),
+        nullable=False,
+    )
+    content = Column(Text, nullable=False)
+
+    # Optional metadata about the answer
+    query_id = Column(UUID(as_uuid=True), nullable=True)       # from QueryResponse.query_id
+    answer_metadata = Column(Text, nullable=True)              # JSON blob as text if needed
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    session = relationship("ChatSession", back_populates="messages")
+
+    __table_args__ = (
+        Index("idx_chat_message_session_created", "session_id", "created_at"),
     )

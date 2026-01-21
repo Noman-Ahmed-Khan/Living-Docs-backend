@@ -22,7 +22,7 @@ from app.dependencies import (
 router = APIRouter()
 
 
-# ============== Registration ==============
+# Registration
 
 @router.post("/register", response_model=auth_schema.MessageResponse)
 async def register(

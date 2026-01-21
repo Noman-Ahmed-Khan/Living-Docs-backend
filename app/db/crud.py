@@ -638,3 +638,120 @@ def reset_document_for_reingestion(db: Session, db_document: models.Document) ->
     db.commit()
     db.refresh(db_document)
     return db_document
+
+# Chat Session + Message CRUD
+
+from app.db.models import ChatSession, ChatMessage, ChatMessageRole
+
+def create_chat_session(
+    db: Session,
+    user_id: UUID,
+    project_id: UUID,
+    title: Optional[str] = None,
+) -> ChatSession:
+    session_obj = ChatSession(
+        user_id=user_id,
+        project_id=project_id,
+        title=title,
+        is_active=True,
+    )
+    db.add(session_obj)
+    db.commit()
+    db.refresh(session_obj)
+    return session_obj
+
+
+def get_chat_session(
+    db: Session,
+    session_id: UUID,
+    user_id: UUID,
+) -> Optional[ChatSession]:
+    return (
+        db.query(ChatSession)
+        .filter(
+            ChatSession.id == session_id,
+            ChatSession.user_id == user_id,
+        )
+        .first()
+    )
+
+
+def list_chat_sessions(
+    db: Session,
+    user_id: UUID,
+    project_id: Optional[UUID] = None,
+    skip: int = 0,
+    limit: int = 100,
+) -> Tuple[List[ChatSession], int]:
+    query = db.query(ChatSession).filter(ChatSession.user_id == user_id)
+
+    if project_id:
+        query = query.filter(ChatSession.project_id == project_id)
+
+    total = query.count()
+    sessions = (
+        query.order_by(ChatSession.last_message_at.desc().nullslast(),
+                       ChatSession.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return sessions, total
+
+
+def delete_chat_session(
+    db: Session,
+    session_obj: ChatSession,
+) -> None:
+    db.delete(session_obj)
+    db.commit()
+
+
+def create_chat_message(
+    db: Session,
+    session_obj: ChatSession,
+    role: ChatMessageRole,
+    content: str,
+    query_id: Optional[UUID] = None,
+    answer_metadata: Optional[str] = None,
+) -> ChatMessage:
+    msg = ChatMessage(
+        session_id=session_obj.id,
+        role=role,
+       content=content,
+        query_id=query_id,
+        answer_metadata=answer_metadata,
+    )
+    db.add(msg)
+
+    # update session timestamps
+    from datetime import datetime, timezone
+    session_obj.last_message_at = datetime.now(timezone.utc)
+    db.add(session_obj)
+
+    db.commit()
+    db.refresh(msg)
+    return msg
+
+
+def list_chat_messages(
+    db: Session,
+    session_id: UUID,
+    user_id: UUID,
+    skip: int = 0,
+    limit: int = 200,
+) -> List[ChatMessage]:
+    # ensure the session belongs to user
+    session_obj = get_chat_session(db, session_id=session_id, user_id=user_id)
+    if not session_obj:
+        return []
+
+    return (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )

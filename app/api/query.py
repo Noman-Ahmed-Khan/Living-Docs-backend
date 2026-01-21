@@ -14,7 +14,8 @@ from app.dependencies import get_current_user
 from app.rag.query import RAGQueryEngine
 from app.rag.exceptions import QueryError
 from app.rag.config import RetrieverConfig, RetrievalStrategy, QueryConfig
-
+from app.db.models import ChatMessageRole
+from app.schemas import chat as chat_schema
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -114,7 +115,66 @@ async def query_documents(
         
         # Add query ID for tracking
         response.query_id = str(uuid.uuid4())
-        
+
+        # Chat session persistence
+        # If session_id is provided, validate that it belongs to this user & project
+        session_obj = None
+        if query_in.session_id:
+            try:
+                session_uuid = UUID(query_in.session_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid session_id format",
+                )
+
+            session_obj = crud.get_chat_session(
+                db=db, session_id=session_uuid, user_id=current_user.id
+            )
+            if not session_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Chat session not found",
+                )
+
+            # Ensure session belongs to the same project
+            if str(session_obj.project_id) != query_in.project_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="session_id does not belong to the specified project",
+                )
+
+        # If no session provided, you can optionally auto-create one, or leave it.
+        # Example: auto-create a session for this query
+        if not session_obj:
+            session_obj = crud.create_chat_session(
+                db=db,
+                user_id=current_user.id,
+                project_id=UUID(query_in.project_id),
+                title=None,
+            )
+
+        # Store user question
+        crud.create_chat_message(
+            db=db,
+            session_obj=session_obj,
+            role=ChatMessageRole.USER,
+            content=query_in.question,
+        )
+
+        # Store assistant answer, including query_id and metadata if desired
+        from json import dumps as json_dumps
+        metadata_json = json_dumps(response.metadata or {}) if response.metadata else None
+
+        crud.create_chat_message(
+            db=db,
+            session_obj=session_obj,
+            role=ChatMessageRole.ASSISTANT,
+            content=response.answer,
+            query_id=UUID(response.query_id) if response.query_id else None,
+            answer_metadata=metadata_json,
+        )
+
         return response
         
     except QueryError as e:
