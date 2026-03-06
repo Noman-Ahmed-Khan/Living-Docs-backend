@@ -8,8 +8,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import your models and settings
-from app.db.models import Base
-from app.settings import settings
+from app.infrastructure.database.session import Base
+from app.infrastructure.database.models import (
+    UserModel, RefreshTokenModel, VerificationTokenModel, PasswordResetTokenModel,
+    ProjectModel, DocumentModel, ChatSessionModel, ChatMessageModel
+)
+from app.config.settings import settings
 
 # this is the Alembic Config object
 config = context.config

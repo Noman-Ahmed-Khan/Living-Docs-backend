@@ -1,71 +1,82 @@
-"""Query API endpoints for RAG-based document querying."""
+"""Query API endpoints - thin layer delegating to QueryService."""
 
 import logging
-import uuid
-from typing import Optional
 from uuid import UUID
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.db import crud, session, models
-from app.schemas import query as query_schema
-from app.dependencies import get_current_user
-from app.rag.query import RAGQueryEngine
-from app.rag.exceptions import QueryError
-from app.rag.config import RetrieverConfig, RetrievalStrategy, QueryConfig
-from app.db.models import ChatMessageRole
-from app.schemas import chat as chat_schema
+from app.api.container_dependencies import get_query_service, get_db, get_project_service, get_document_service, get_current_verified_user
+from app.api.schemas import query as query_schema
+from app.infrastructure.database.models import DocumentStatus, ProjectModelStatus
+from app.application.query.query_service import QueryService
+from app.application.projects.service import ProjectService
+from app.application.documents.service import DocumentService
+from app.domain.rag.exceptions import (
+    InvalidQueryError,
+    NoContextFoundError,
+    QueryError
+)
+from app.domain.projects.exceptions import ProjectNotFoundError
+from app.domain.users.entities import User
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def get_retrieval_strategy(strategy: query_schema.RetrievalStrategy) -> RetrievalStrategy:
-    """Convert schema enum to RAG enum."""
-    return RetrievalStrategy(strategy.value)
-
-
 @router.post(
     "/",
     response_model=query_schema.QueryResponse,
-    summary="Query documents"
+    summary="Query documents",
+    responses={
+        200: {"description": "Successful query with answer and citations"},
+        400: {"description": "Invalid query or no processed documents"},
+        404: {"description": "Project not found or no relevant context"},
+        500: {"description": "Query processing failed"}
+    }
 )
 async def query_documents(
     query_in: query_schema.QueryRequest,
-    db: Session = Depends(session.get_db),
-    current_user: models.User = Depends(get_current_user)
+    query_service: QueryService = Depends(get_query_service),
+    project_service: ProjectService = Depends(get_project_service),
+    document_service: DocumentService = Depends(get_document_service),
+    current_user: User = Depends(get_current_verified_user),
+    db: Session = Depends(get_db)
 ):
     """
     Query documents in a project using RAG.
     
     This endpoint:
-    1. Retrieves relevant document chunks based on the question
-    2. Uses an LLM to generate an answer with citations
-    3. Returns the answer with source citations
-    
-    Parameters:
-    - **project_id**: The project to query
-    - **question**: Your question (1-2000 characters)
-    - **document_ids**: Optional filter to specific documents
-    - **retrieval_strategy**: How to retrieve chunks (similarity, mmr, hybrid)
-    - **top_k**: Number of chunks to retrieve (1-20)
+    1. Validates project ownership and document status
+    2. Executes RAG query via QueryService
+    3. Returns answer with source citations
     """
-    # Verify project ownership
-    project = crud.get_project(
-        db, 
-        project_id=UUID(query_in.project_id), 
-        owner_id=current_user.id
-    )
-    if not project:
+    # Verify project ownership and status
+    try:
+        project = await project_service.get_project(
+            project_id=UUID(query_in.project_id),
+            owner_id=current_user.id
+        )
+    except ProjectNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
         )
     
+    if project.status == ProjectModelStatus.ARCHIVED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot query archived projects"
+        )
+    
     # Check if project has completed documents
-    stats = crud.get_project_stats(db, project_id=UUID(query_in.project_id))
-    if stats['completed_documents'] == 0:
+    project_with_stats = await project_service.get_project_with_stats(
+        project_id=UUID(query_in.project_id),
+        owner_id=current_user.id
+    )
+    if project_with_stats.stats.completed_documents == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No processed documents available in this project. Please upload and wait for processing to complete."
@@ -73,11 +84,10 @@ async def query_documents(
     
     # Validate document_ids if provided
     if query_in.document_ids:
-        documents, _ = crud.get_documents_by_project(
-            db,
+        documents, _ = await document_service.list_documents(
             project_id=UUID(query_in.project_id)
         )
-        valid_doc_ids = {str(doc.id) for doc in documents if doc.status == models.DocumentStatus.COMPLETED}
+        valid_doc_ids = {str(doc.id) for doc in documents if doc.status == DocumentStatus.COMPLETED.value}
         
         for doc_id in query_in.document_ids:
             if doc_id not in valid_doc_ids:
@@ -87,104 +97,44 @@ async def query_documents(
                 )
     
     try:
-        # Configure retriever
-        retriever_config = RetrieverConfig(
-            strategy=get_retrieval_strategy(query_in.retrieval_strategy),
-            top_k=query_in.top_k
-        )
-        
-        # Configure query
-        query_config = QueryConfig(
-            temperature=0.0,
-            citation_required=True
-        )
-        
-        # Initialize query engine
-        engine = RAGQueryEngine(
-            project_id=query_in.project_id,
-            query_config=query_config,
-            retriever_config=retriever_config
-        )
-        
-        # Execute query
-        response = await engine.query(
+        # Execute query via service (all business logic delegated)
+        result = await query_service.query(
             question=query_in.question,
-            document_ids=query_in.document_ids,
-            include_all_sources=query_in.include_all_sources
+            project_id=UUID(query_in.project_id),
+            user_id=current_user.id,
+            document_ids=[UUID(doc_id) for doc_id in query_in.document_ids] if query_in.document_ids else None,
+            session_id=UUID(query_in.session_id) if query_in.session_id else None,
+            retrieval_strategy=query_in.retrieval_strategy,
+            top_k=query_in.top_k,
+            include_all_sources=query_in.include_all_sources,
+            db=db
         )
         
-        # Add query ID for tracking
-        response.query_id = str(uuid.uuid4())
-
-        # Chat session persistence
-        # If session_id is provided, validate that it belongs to this user & project
-        session_obj = None
-        if query_in.session_id:
-            try:
-                session_uuid = UUID(query_in.session_id)
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid session_id format",
+        # Convert domain entity to API response
+        return query_schema.QueryResponse(
+            query_id=str(result.query_id),
+            answer=result.answer,
+            citations=[
+                query_schema.Citation(
+                    chunk_id=c.chunk_id,
+                    document_id=str(c.document_id),
+                    source_file=c.source_file,
+                    text_snippet=c.text_snippet,
+                    page=c.page,
+                    char_start=c.char_start,
+                    char_end=c.char_end,
+                    relevance_score=c.relevance_score
                 )
-
-            session_obj = crud.get_chat_session(
-                db=db, session_id=session_uuid, user_id=current_user.id
-            )
-            if not session_obj:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Chat session not found",
-                )
-
-            # Ensure session belongs to the same project
-            if str(session_obj.project_id) != query_in.project_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="session_id does not belong to the specified project",
-                )
-
-        # If no session provided, you can optionally auto-create one, or leave it.
-        # Example: auto-create a session for this query
-        if not session_obj:
-            session_obj = crud.create_chat_session(
-                db=db,
-                user_id=current_user.id,
-                project_id=UUID(query_in.project_id),
-                title=None,
-            )
-
-        # Store user question
-        crud.create_chat_message(
-            db=db,
-            session_obj=session_obj,
-            role=ChatMessageRole.USER,
-            content=query_in.question,
+                for c in result.citations
+            ],
+            metadata=result.metadata
         )
-
-        # Store assistant answer, including query_id and metadata if desired
-        from json import dumps as json_dumps
-        metadata_json = json_dumps(response.metadata or {}) if response.metadata else None
-
-        crud.create_chat_message(
-            db=db,
-            session_obj=session_obj,
-            role=ChatMessageRole.ASSISTANT,
-            content=response.answer,
-            query_id=UUID(response.query_id) if response.query_id else None,
-            answer_metadata=metadata_json,
-        )
-
-        return response
         
-    except QueryError as e:
-        logger.error(f"Query failed: {e.message}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Query processing failed: {e.message}"
-        )
+    except (InvalidQueryError, NoContextFoundError, QueryError):
+        # Let middleware handle domain exceptions
+        raise
     except Exception as e:
-        logger.exception(f"Unexpected error during query: {e}")
+        logger.error(f"Unexpected error in query endpoint: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while processing your query"
@@ -194,68 +144,72 @@ async def query_documents(
 @router.post(
     "/similar",
     response_model=query_schema.SimilarChunksResponse,
-    summary="Find similar chunks"
+    summary="Find similar chunks",
+    responses={
+        200: {"description": "Similar chunks found"},
+        400: {"description": "Invalid input"},
+        404: {"description": "Project not found or no similar chunks"}
+    }
 )
 async def find_similar_chunks(
     request: query_schema.SimilarChunksRequest,
-    db: Session = Depends(session.get_db),
-    current_user: models.User = Depends(get_current_user)
+    query_service: QueryService = Depends(get_query_service),
+    project_service: ProjectService = Depends(get_project_service),
+    current_user: User = Depends(get_current_verified_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Find document chunks similar to the provided text.
+    Find document chunks similar to provided text.
     
-    This is useful for:
-    - Finding related content
+    Useful for:
+    - Finding related content without generating an answer
     - Checking if similar information exists
     - Exploring document content
     """
     # Verify project ownership
-    project = crud.get_project(
-        db,
-        project_id=UUID(request.project_id),
-        owner_id=current_user.id
-    )
-    if not project:
+    try:
+        project = await project_service.get_project(
+            project_id=UUID(request.project_id),
+            owner_id=current_user.id
+        )
+    except ProjectNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
         )
     
     try:
-        from app.rag.retriever import create_retriever
-        from app.rag.config import RetrievalStrategy
-        
-        retriever = create_retriever(
-            project_id=request.project_id,
-            strategy=RetrievalStrategy.SIMILARITY,
-            top_k=request.top_k
+        # Execute similar search via service
+        chunks = await query_service.find_similar(
+            text=request.text,
+            project_id=UUID(request.project_id),
+            user_id=current_user.id,
+            document_ids=[UUID(doc_id) for doc_id in request.document_ids] if request.document_ids else None,
+            top_k=request.top_k,
+            db=db
         )
-        
-        result = await retriever.retrieve(
-            query=request.text,
-            document_ids=request.document_ids
-        )
-        
-        chunks = []
-        for i, doc in enumerate(result.documents):
-            chunks.append(query_schema.Citation(
-                chunk_id=doc.metadata.get('chunk_id', 'unknown'),
-                document_id=doc.metadata.get('document_id'),
-                source_file=doc.metadata.get('source_file', 'unknown'),
-                page=doc.metadata.get('page'),
-                char_start=doc.metadata.get('char_start'),
-                char_end=doc.metadata.get('char_end'),
-                text_snippet=doc.page_content[:300] + "..." if len(doc.page_content) > 300 else doc.page_content,
-                relevance_score=result.scores[i] if i < len(result.scores) else None
-            ))
         
         return query_schema.SimilarChunksResponse(
-            chunks=chunks,
-            query_text=request.text
+            query_text=request.text,
+            chunks=[
+                query_schema.Citation(
+                    chunk_id=c.chunk_id,
+                    document_id=str(c.document_id),
+                    source_file=c.metadata.source_file if hasattr(c.metadata, 'source_file') else c.metadata.get('source_file', 'unknown'),
+                    text_snippet=c.text[:300] + "..." if len(c.text) > 300 else c.text,
+                    page=c.metadata.page if hasattr(c.metadata, 'page') else c.metadata.get('page'),
+                    char_start=c.metadata.char_start if hasattr(c.metadata, 'char_start') else c.metadata.get('char_start'),
+                    char_end=c.metadata.char_end if hasattr(c.metadata, 'char_end') else c.metadata.get('char_end'),
+                    relevance_score=c.score if hasattr(c, 'score') else None
+                )
+                for c in chunks
+            ]
         )
         
+    except (NoContextFoundError, QueryError):
+        raise
     except Exception as e:
-        logger.exception(f"Similar chunks search failed: {e}")
+        logger.error(f"Similar chunks search failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to find similar chunks"

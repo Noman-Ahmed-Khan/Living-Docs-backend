@@ -1,14 +1,22 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
 
 from app.api import auth, users, projects, documents, query, health, chat
-from app.db.session import engine, Base, SessionLocal
-from app.db import crud
-from app.settings import settings
+from app.api.middleware.error_handler import (
+    domain_exception_handler,
+    validation_exception_handler,
+    generic_exception_handler
+)
+from app.container import get_container
+from app.api.v1.router import api_v1_router
+from app.infrastructure.database.session import engine, Base, SessionLocal
+from app.config.settings import settings
+from app.domain.common.exceptions import DomainException
 
 
 # Configure logging
@@ -28,15 +36,19 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
     logger.info("Starting up Living Docs API...")
-    db = SessionLocal()
+    container = get_container()
+    db = next(container.get_db())
     try:
+        user_repo = container.user_repository(db)
+        rt_repo = container.refresh_token_repository(db)
+        
         # Cleanup deactivated users
-        deleted_count = crud.cleanup_deactivated_users(db)
+        deleted_count = await user_repo.cleanup_deactivated_users()
         if deleted_count > 0:
             logger.info(f"Cleaned up {deleted_count} deactivated users")
         
         # Cleanup expired tokens
-        expired_tokens = crud.cleanup_expired_tokens(db)
+        expired_tokens = await rt_repo.cleanup_expired_tokens()
         if expired_tokens > 0:
             logger.info(f"Cleaned up {expired_tokens} expired tokens")
     except Exception as e:
@@ -62,6 +74,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Register exception handlers (before middleware)
+app.add_exception_handler(DomainException, domain_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
 
 # Set up CORS
 app.add_middleware(
@@ -73,42 +89,9 @@ app.add_middleware(
 )
 
 
-# Include routers
-app.include_router(
-    auth.router, 
-    prefix=f"{settings.API_V1_STR}/auth", 
-    tags=["auth"]
-)
-app.include_router(
-    users.router, 
-    prefix=f"{settings.API_V1_STR}/users", 
-    tags=["users"]
-)
-app.include_router(
-    projects.router, 
-    prefix=f"{settings.API_V1_STR}/projects", 
-    tags=["projects"]
-)
-app.include_router(
-    documents.router, 
-    prefix=f"{settings.API_V1_STR}/documents", 
-    tags=["documents"]
-)
-app.include_router(
-    query.router, 
-    prefix=f"{settings.API_V1_STR}/query", 
-    tags=["query"]
-)
-app.include_router(
-    chat.router, 
-    prefix=f"{settings.API_V1_STR}/chat", 
-    tags=["chat"]
-)
-app.include_router(
-    health.router, 
-    prefix="/health", 
-    tags=["health"]
-)
+# Include API v1 router (aggregated)
+app.include_router(api_v1_router)
+
 
 
 @app.get("/test-upload", response_class=HTMLResponse)

@@ -6,9 +6,9 @@ from sqlalchemy import text
 from pydantic import BaseModel
 from typing import Dict, Any
 
-from app.db.session import get_db
-from app.rag.vectorstore import get_vectorstore_manager
-from app.settings import settings
+from app.api.container_dependencies import get_db, get_vector_store
+from app.domain.rag.interfaces import IVectorStore
+from app.config.settings import settings
 
 
 router = APIRouter()
@@ -22,7 +22,10 @@ class HealthResponse(BaseModel):
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health_check(db: Session = Depends(get_db)):
+async def health_check(
+    db: Session = Depends(get_db),
+    vector_store: IVectorStore = Depends(get_vector_store)
+):
     """
     Check health of all services.
     
@@ -44,11 +47,11 @@ async def health_check(db: Session = Depends(get_db)):
     
     # Check vector store
     try:
-        manager = get_vectorstore_manager()
-        stats = manager.get_stats()
+        stats = await vector_store.get_stats()
         services["vectorstore"] = {
             "status": "healthy",
-            "total_vectors": stats.get("total_vector_count", 0)
+            "total_vectors": stats.get("total_vector_count", 0),
+            "index": stats.get("index_name")
         }
     except Exception as e:
         services["vectorstore"] = {"status": "unhealthy", "error": str(e)}
