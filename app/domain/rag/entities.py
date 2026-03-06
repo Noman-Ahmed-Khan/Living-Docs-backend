@@ -1,0 +1,91 @@
+"""RAG domain entities."""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+from uuid import UUID
+
+from app.domain.common.entity import Entity
+from .value_objects import ChunkMetadata, EmbeddingVector
+
+
+@dataclass
+class QueryRequest(Entity):
+    """Represents a user query request."""
+    question: str
+    project_id: UUID
+    user_id: UUID
+    document_ids: Optional[List[UUID]] = None
+    session_id: Optional[UUID] = None
+    
+    def __post_init__(self):
+        if not self.question or len(self.question.strip()) == 0:
+            raise ValueError("Question cannot be empty")
+        if len(self.question) > 2000:
+            raise ValueError("Question too long (max 2000 characters)")
+
+
+@dataclass
+class Citation:
+    """Citation linking answer to source chunk."""
+    chunk_id: str
+    document_id: UUID
+    source_file: str
+    text_snippet: str
+    page: Optional[int] = None
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    relevance_score: Optional[float] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for API response."""
+        return {
+            "chunk_id": self.chunk_id,
+            "document_id": str(self.document_id),
+            "source_file": self.source_file,
+            "text_snippet": self.text_snippet,
+            "page": self.page,
+            "char_start": self.char_start,
+            "char_end": self.char_end,
+            "relevance_score": self.relevance_score
+        }
+
+
+@dataclass
+class QueryResult(Entity):
+    """Result of a RAG query."""
+    query_id: UUID
+    question: str
+    answer: str
+    citations: List[Citation] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    @property
+    def has_citations(self) -> bool:
+        """Check if result has citations."""
+        return len(self.citations) > 0
+    
+    def add_citation(self, citation: Citation) -> None:
+        """Add a citation to the result."""
+        self.citations.append(citation)
+
+
+@dataclass
+class RetrievedChunk:
+    """A chunk retrieved from vector store."""
+    chunk_id: str
+    text: str
+    document_id: UUID
+    metadata: ChunkMetadata
+    score: float
+    embedding: Optional[EmbeddingVector] = None
+    
+    def to_context_string(self) -> str:
+        """Format chunk for LLM context."""
+        header = f"[ID: {self.chunk_id}]"
+        if self.metadata.source_file:
+            header += f" (Source: {self.metadata.source_file}"
+            if self.metadata.page:
+                header += f", Page: {self.metadata.page}"
+            header += ")"
+        return f"{header}\n{self.text}"
