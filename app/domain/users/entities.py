@@ -28,8 +28,9 @@ class User(Entity):
     - Failed logins trigger account lockout
     """
 
-    email: str
-    hashed_password: str
+    # All fields must have defaults because Entity has defaults
+    email: str = ""
+    hashed_password: str = ""
     full_name: Optional[str] = None
     is_active: bool = True
     is_verified: bool = False
@@ -139,10 +140,11 @@ class RefreshToken(Entity):
     - Token rotation for security (family_id groups reuse-detection)
     """
 
-    token: str
-    user_id: UUID
-    expires_at: datetime
-    family_id: UUID
+    # All fields must have defaults because Entity has defaults
+    token: str = ""
+    user_id: UUID = field(default_factory=uuid4)
+    expires_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    family_id: UUID = field(default_factory=uuid4)
     is_revoked: bool = False
     revoked_at: Optional[datetime] = None
     replaced_by: Optional[UUID] = None

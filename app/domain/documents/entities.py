@@ -28,11 +28,11 @@ class Document(Entity):
     - chunk_count >= 0
     """
 
-    filename: str
-    original_filename: str
-    project_id: UUID
-    file_path: str
-    status: DocumentStatus
+    filename: str = ""
+    original_filename: str = ""
+    project_id: UUID = field(default_factory=uuid4)
+    file_path: str = ""
+    status: DocumentStatus = DocumentStatus.PENDING
     file_size: Optional[int] = None
     file_type: Optional[str] = None
     content_type: Optional[str] = None
@@ -56,15 +56,15 @@ class Document(Entity):
         """Factory method to create a new document."""
         return cls(
             id=uuid4(),
+            created_at=datetime.utcnow(),
             filename=filename,
             original_filename=original_filename,
             project_id=project_id,
             file_path=file_path,
+            status=DocumentStatus.PENDING,
             file_size=file_size,
             file_type=file_type,
             content_type=content_type,
-            status=DocumentStatus.PENDING,
-            created_at=datetime.utcnow(),
             chunk_count=0
         )
 
@@ -117,9 +117,9 @@ class Chunk(Entity):
     Used for RAG retrieval.
     """
 
-    text: str
-    document_id: UUID
-    chunk_index: int
+    text: str = ""
+    document_id: UUID = field(default_factory=uuid4)
+    chunk_index: int = 0
     metadata: dict = field(default_factory=dict)
 
     @classmethod
@@ -133,9 +133,9 @@ class Chunk(Entity):
         """Create a chunk with metadata."""
         return cls(
             id=uuid4(),
+            created_at=datetime.utcnow(),
             text=text,
             document_id=document_id,
             chunk_index=chunk_index,
-            metadata=metadata,
-            created_at=datetime.utcnow()
+            metadata=metadata
         )

@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from app.domain.common.entity import Entity
 from .value_objects import ChunkMetadata, EmbeddingVector
@@ -12,13 +12,16 @@ from .value_objects import ChunkMetadata, EmbeddingVector
 @dataclass
 class QueryRequest(Entity):
     """Represents a user query request."""
-    question: str
-    project_id: UUID
-    user_id: UUID
+    
+    # All fields must have defaults because Entity has defaults
+    question: str = ""
+    project_id: UUID = field(default_factory=uuid4)
+    user_id: UUID = field(default_factory=uuid4)
     document_ids: Optional[List[UUID]] = None
     session_id: Optional[UUID] = None
     
     def __post_init__(self):
+        super().__post_init__() if hasattr(super(), '__post_init__') else None
         if not self.question or len(self.question.strip()) == 0:
             raise ValueError("Question cannot be empty")
         if len(self.question) > 2000:
@@ -28,6 +31,8 @@ class QueryRequest(Entity):
 @dataclass
 class Citation:
     """Citation linking answer to source chunk."""
+    
+    # This doesn't inherit from Entity, so required fields are OK
     chunk_id: str
     document_id: UUID
     source_file: str
@@ -54,9 +59,11 @@ class Citation:
 @dataclass
 class QueryResult(Entity):
     """Result of a RAG query."""
-    query_id: UUID
-    question: str
-    answer: str
+    
+    # All fields must have defaults because Entity has defaults
+    query_id: UUID = field(default_factory=uuid4)
+    question: str = ""
+    answer: str = ""
     citations: List[Citation] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
     
@@ -73,6 +80,8 @@ class QueryResult(Entity):
 @dataclass
 class RetrievedChunk:
     """A chunk retrieved from vector store."""
+    
+    # This doesn't inherit from Entity, so required fields are OK
     chunk_id: str
     text: str
     document_id: UUID

@@ -57,6 +57,8 @@ class RetrieverConfig:
     strategy: RetrievalStrategy = RetrievalStrategy.MMR
     top_k: int = 5
     score_threshold: float = 0.5
+    fetch_k: int = 20
+    lambda_mult: float = 0.3  # Lambda for MMR (Maximal Marginal Relevance)
     mmr_diversity: float = 0.3  # Lambda for MMR
     rerank_enabled: bool = True
     max_rerank_candidates: int = 20
@@ -75,9 +77,10 @@ class QueryConfig:
 @dataclass
 class RAGConfig:
     """Master configuration for RAG pipeline."""
-    chunker: ChunkerConfig = field(default_factory=ChunkerConfig)
-    retriever: RetrieverConfig = field(default_factory=RetrieverConfig)
-    query: QueryConfig = field(default_factory=QueryConfig)
+    chunker_config: ChunkerConfig = field(default_factory=ChunkerConfig)
+    retriever_config: RetrieverConfig = field(default_factory=RetrieverConfig)
+    query_config: QueryConfig = field(default_factory=QueryConfig)
+    retrieval_strategy: str = "mmr"
 
 
 # ============================================================================
@@ -252,6 +255,27 @@ class Settings(BaseSettings):
     def rag_enabled(self) -> bool:
         """Check if RAG is fully configured."""
         return bool(self.HUGGINGFACE_API_KEY and self.PINECONE_API_KEY)
+
+    @computed_field
+    @property
+    def RAG_CONFIG(self) -> RAGConfig:
+        """Get RAG configuration with values from settings."""
+        return RAGConfig(
+            chunker_config=ChunkerConfig(
+                strategy=ChunkingStrategy.RECURSIVE,
+                chunk_size=self.DEFAULT_CHUNK_SIZE,
+                chunk_overlap=self.DEFAULT_CHUNK_OVERLAP,
+            ),
+            retriever_config=RetrieverConfig(
+                strategy=RetrievalStrategy(self.DEFAULT_RETRIEVAL_STRATEGY),
+                top_k=self.DEFAULT_TOP_K,
+            ),
+            query_config=QueryConfig(
+                temperature=self.DEFAULT_TEMPERATURE,
+                max_tokens=self.MAX_TOKENS,
+            ),
+            retrieval_strategy=self.DEFAULT_RETRIEVAL_STRATEGY,
+        )
 
     # ========================================================================
     # VALIDATORS

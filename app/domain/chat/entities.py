@@ -20,9 +20,9 @@ class MessageRole(str, Enum):
 class ChatMessage(Entity):
     """A single message within a chat session."""
 
-    session_id: UUID
-    role: MessageRole
-    content: str
+    session_id: UUID = field(default_factory=uuid4)
+    role: MessageRole = MessageRole.USER
+    content: str = ""
     query_id: Optional[UUID] = None
     answer_metadata: Optional[str] = None
 
@@ -58,8 +58,8 @@ class ChatSession(Entity):
     - Deactivated sessions are hidden from list views
     """
 
-    project_id: UUID
-    user_id: UUID
+    project_id: UUID = field(default_factory=uuid4)
+    user_id: UUID = field(default_factory=uuid4)
     title: Optional[str] = None
     is_active: bool = True
     last_message_at: Optional[datetime] = None

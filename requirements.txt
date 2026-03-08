@@ -16,7 +16,7 @@ requests
 langchain-text-splitters
 langchain-pinecone
 langchain-core
-pincone
+pinecone
 pinecone-client==3.0.2
 pypdf
 python-docx

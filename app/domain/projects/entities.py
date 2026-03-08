@@ -1,6 +1,6 @@
 """Project domain entities."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
@@ -26,8 +26,8 @@ class Project(Entity):
     - chunk_size / chunk_overlap are RAG configuration for the project
     """
 
-    name: str
-    owner_id: UUID
+    name: str = ""
+    owner_id: UUID = field(default_factory=uuid4)
     status: ProjectStatus = ProjectStatus.ACTIVE
     description: Optional[str] = None
     chunk_size: int = 1000
@@ -86,3 +86,4 @@ class Project(Entity):
     @property
     def is_archived(self) -> bool:
         return self.status == ProjectStatus.ARCHIVED
+
