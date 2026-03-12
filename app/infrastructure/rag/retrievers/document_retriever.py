@@ -14,7 +14,7 @@ from app.domain.rag.value_objects import RetrieverConfig
 logger = logging.getLogger(__name__)
 
 
-class BaseRetriever(ABC, IRetriever):
+class BaseRetriever(IRetriever):
     """Abstract base retriever."""
     
     def __init__(

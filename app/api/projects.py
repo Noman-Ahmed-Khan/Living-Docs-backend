@@ -153,11 +153,12 @@ async def unarchive_project(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete project"
 )
+
 async def delete_project(
     project_id: UUID,
     project_service: ProjectService = Depends(get_project_service),
     current_user: User = Depends(get_current_active_user)
-) -> Any:
+) -> None:
     """Permanently delete a project and all its documents."""
     await project_service.delete_project(
         project_id=project_id, 

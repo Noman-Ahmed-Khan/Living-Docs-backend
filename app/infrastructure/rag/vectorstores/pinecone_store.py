@@ -44,12 +44,18 @@ class PineconeVectorStore(IVectorStore):
             self._index = self._client.Index(self._index_name)
             
             # Verify connection by getting index stats
-            stats = self._index.describe_index_stats()
-            logger.info(
-                f"Connected to Pinecone index: {self._index_name} "
-                f"(namespaces: {list(stats.namespace_names)})"
-            )
-            
+            try:
+                stats = self._index.describe_index_stats()
+                namespaces = list(stats.namespaces.keys()) if stats.namespaces else []
+                total_vectors = stats.total_vector_count if hasattr(stats, 'total_vector_count') else 0
+                
+                logger.info(
+                    f"Connected to Pinecone index: {self._index_name} "
+                    f"(total_vectors: {total_vectors}, namespaces: {namespaces})"
+                )
+            except AttributeError:
+                logger.info(f"Connected to Pinecone index: {self._index_name}")
+
         except Exception as e:
             logger.error(f"Failed to connect to Pinecone: {e}", exc_info=True)
             raise VectorStoreError(

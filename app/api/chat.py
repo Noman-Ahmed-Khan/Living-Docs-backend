@@ -62,11 +62,12 @@ async def create_session(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a chat session",
 )
+
 async def delete_session(
     session_id: UUID,
     chat_service: ChatService = Depends(get_chat_service),
     current_user: User = Depends(get_current_active_user),
-) -> Any:
+) -> None:
     """Delete a chat session."""
     await chat_service.delete_session(
         session_id=session_id, 

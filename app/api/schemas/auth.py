@@ -5,81 +5,148 @@ from uuid import UUID
 
 
 class Token(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int  # Access token expiry in seconds
+    """JWT token response for login and refresh endpoints."""
+    access_token: str = Field(..., description="JWT access token for API authentication")
+    refresh_token: str = Field(..., description="JWT refresh token for obtaining new access tokens")
+    token_type: str = Field(default="bearer", description="Token type, always 'bearer'")
+    expires_in: int = Field(..., description="Access token expiry time in seconds")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "token_type": "bearer",
+                "expires_in": 3600
+            }
+        }
 
 
 class TokenData(BaseModel):
-    user_id: Optional[UUID] = None
-    token_type: Optional[str] = None  # "access" or "refresh"
+    """Token claims extracted from JWT."""
+    user_id: Optional[UUID] = Field(None, description="User ID from token")
+    token_type: Optional[str] = Field(None, description="'access' or 'refresh'")
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    """Request to refresh access token."""
+    refresh_token: str = Field(..., description="Valid refresh token from login/refresh response")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            }
+        }
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
+    """Credentials for login."""
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(..., description="User password")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com",
+                "password": "SecurePass123!"
+            }
+        }
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=8)
+    """User registration request."""
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(
+        ...,
+        min_length=8,
+        description="Password must be at least 8 characters with uppercase, lowercase, digit, and special character"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com",
+                "password": "SecurePass123!"
+            }
+        }
 
 
 class VerifyEmailRequest(BaseModel):
-    token: str
+    """Email verification request."""
+    token: str = Field(..., description="Verification token received in email")
 
 
 class ResendVerificationRequest(BaseModel):
-    email: EmailStr
+    """Request to resend verification email."""
+    email: EmailStr = Field(..., description="Email address to send verification to")
 
 
 class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+    """Password reset request."""
+    email: EmailStr = Field(..., description="Email address for password reset")
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str = Field(..., min_length=8)
+    """Password reset with token."""
+    token: str = Field(..., description="Password reset token from email")
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        description="New password (8+ chars with uppercase, lowercase, digit, special)"
+    )
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str = Field(..., min_length=8)
+    """Change password for authenticated user."""
+    current_password: str = Field(..., description="Current password for verification")
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        description="New password (8+ chars with uppercase, lowercase, digit, special)"
+    )
 
 
 class ChangeEmailRequest(BaseModel):
-    new_email: EmailStr
-    password: str
+    """Change email for authenticated user."""
+    new_email: EmailStr = Field(..., description="New email address")
+    password: str = Field(..., description="Current password for verification")
 
 
 class SessionInfo(BaseModel):
-    id: UUID
-    device_info: Optional[str] = None
-    ip_address: Optional[str] = None
-    created_at: datetime
-    expires_at: datetime
-    is_current: bool = False
+    """Information about an authenticated session."""
+    id: UUID = Field(..., description="Session ID")
+    device_info: Optional[str] = Field(None, description="Device information (User-Agent)")
+    ip_address: Optional[str] = Field(None, description="IP address of session")
+    created_at: datetime = Field(..., description="Session creation timestamp")
+    expires_at: datetime = Field(..., description="Session expiration timestamp")
+    is_current: bool = Field(False, description="Whether this is the current session")
 
     class Config:
         from_attributes = True
 
 
 class SessionList(BaseModel):
-    sessions: list[SessionInfo]
-    total: int
+    """List of sessions for a user."""
+    sessions: list[SessionInfo] = Field(..., description="List of active sessions")
+    total: int = Field(..., description="Total number of sessions")
 
 
 class MessageResponse(BaseModel):
-    message: str
+    """Generic message response."""
+    message: str = Field(..., description="Response message")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Operation completed successfully"
+            }
+        }
 
 
 class AuthStatus(BaseModel):
-    is_authenticated: bool
-    is_verified: bool
-    email: str
-    user_id: UUID
+    """Authentication status information."""
+    is_authenticated: bool = Field(..., description="Whether user is authenticated")
+    is_verified: bool = Field(..., description="Whether user's email is verified")
+    email: str = Field(..., description="User's email address")
+    user_id: UUID = Field(..., description="User's unique identifier")

@@ -166,3 +166,5 @@ uploads/
 docker-compose.yml
 docker-helper.sh
 Dockerfile
+
+*.md

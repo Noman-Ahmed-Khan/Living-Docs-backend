@@ -38,8 +38,23 @@ A production-ready AI documentation system with explainable RAG and precise cita
 
 ## API Documentation
 Once the server is running, visit:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+- **Swagger UI**: `http://localhost:8000/docs` (interactive testing)
+- **ReDoc**: `http://localhost:8000/redoc` (clean reference)
+- **OpenAPI JSON**: `http://localhost:8000/api/v1/openapi.json` (machine-readable)
+
+### Documentation Files
+- **[API_DOCUMENTATION.md](API_DOCUMENTATION.md)** - Comprehensive API reference with examples
+- **[API_QUICK_REFERENCE.md](API_QUICK_REFERENCE.md)** - Quick lookup table for all endpoints
+- **[SWAGGER_GUIDE.md](SWAGGER_GUIDE.md)** - Guide to using the interactive Swagger documentation
+
+### Key Features of the API Documentation
+ **Fully documented endpoints** - Every endpoint has descriptions, examples, and error codes  
+ **Pydantic schema documentation** - All request/response models with field descriptions  
+ **OpenAPI 3.0 specification** - Machine-readable API specification  
+ **Interactive testing** - Try endpoints directly in Swagger UI  
+ **Authentication guide** - JWT token management and usage  
+ **Error code reference** - All error codes and their meanings  
+ **Code examples** - Curl, Python, and TypeScript examples
 
 ## Ingestion Pipeline
 1. **Upload**: Files are saved to the `uploads/` directory.

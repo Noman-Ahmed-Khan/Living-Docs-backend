@@ -18,10 +18,8 @@ from fastapi import (
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from app.infrastructure.database.models import (
-    DocumentStatus,
-    ProjectModelStatus
-)
+from app.infrastructure.database.models import DocumentStatus
+from app.domain.projects.entities import ProjectStatus 
 from app.api.schemas import document as document_schema
 from app.api.container_dependencies import (
     get_db,
@@ -87,7 +85,7 @@ async def upload_document(
                 detail="Project not found"
             )
         
-        if project.status == ProjectModelStatus.ARCHIVED.value:
+        if project.status ==  ProjectStatus.ARCHIVED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot upload documents to archived projects"
@@ -154,7 +152,7 @@ async def bulk_upload_documents(
                 detail="Project not found"
             )
         
-        if project.status == ProjectModelStatus.ARCHIVED.value:
+        if project.status ==  ProjectStatus.ARCHIVED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot upload documents to archived projects"
@@ -385,7 +383,7 @@ async def reingest_document(
                 detail="Project not found"
             )
         
-        if project.status == ProjectModelStatus.ARCHIVED.value:
+        if project.status ==  ProjectStatus.ARCHIVED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot modify documents in archived projects"

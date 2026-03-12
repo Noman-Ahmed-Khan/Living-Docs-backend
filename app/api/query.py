@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.api.container_dependencies import get_query_service, get_db, get_project_service, get_document_service, get_current_verified_user
 from app.api.schemas import query as query_schema
-from app.infrastructure.database.models import DocumentStatus, ProjectModelStatus
+from app.infrastructure.database.models import DocumentStatus
+from app.domain.projects.entities import ProjectStatus 
 from app.application.query.query_service import QueryService
 from app.application.projects.service import ProjectService
 from app.application.documents.service import DocumentService
@@ -65,7 +66,7 @@ async def query_documents(
             detail="Project not found"
         )
     
-    if project.status == ProjectModelStatus.ARCHIVED.value:
+    if project.status ==  ProjectStatus.ARCHIVED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot query archived projects"

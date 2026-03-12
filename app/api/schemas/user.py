@@ -6,11 +6,17 @@ import re
 
 
 class UserBase(BaseModel):
-    email: EmailStr
+    """Base user model."""
+    email: EmailStr = Field(..., description="User's email address")
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8)
+    """User creation request."""
+    password: str = Field(
+        ...,
+        min_length=8,
+        description="Password must be at least 8 characters with uppercase, lowercase, digit, and special character"
+    )
     
     @field_validator('password')
     @classmethod
@@ -29,12 +35,28 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
+    """User profile update request."""
+    email: Optional[EmailStr] = Field(
+        None,
+        description="New email address (use /auth/change-email endpoint)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "newemail@example.com"
+            }
+        }
 
 
 class PasswordReset(BaseModel):
-    old_password: str
-    new_password: str = Field(..., min_length=8)
+    """Password reset request."""
+    old_password: str = Field(..., description="Current password")
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        description="New password (8+ chars with uppercase, lowercase, digit)"
+    )
     
     @field_validator('new_password')
     @classmethod
@@ -51,21 +73,49 @@ class PasswordReset(BaseModel):
 
 
 class User(UserBase):
-    id: UUID
-    is_active: bool
-    is_verified: bool
-    created_at: datetime
-    last_login_at: Optional[datetime] = None
+    """User profile response."""
+    id: UUID = Field(..., description="User's unique identifier")
+    is_active: bool = Field(..., description="Whether the account is active")
+    is_verified: bool = Field(..., description="Whether email is verified")
+    created_at: datetime = Field(..., description="Account creation timestamp")
+    last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "email": "user@example.com",
+                "is_active": True,
+                "is_verified": True,
+                "created_at": "2024-03-01T10:00:00Z",
+                "last_login_at": "2024-03-08T14:20:00Z"
+            }
+        }
+
+
+class UserProfile(User):
+    """Complete user profile with additional fields."""
+    updated_at: datetime = Field(..., description="Last profile update timestamp")
+    password_changed_at: datetime = Field(..., description="Last password change timestamp")
 
     class Config:
         from_attributes = True
 
 
-class UserProfile(User):
-    updated_at: datetime
-    password_changed_at: datetime
-
-
 class DeleteAccountRequest(BaseModel):
-    password: str
-    confirmation: str = Field(..., pattern="^DELETE$")
+    """Request to permanently delete user account."""
+    password: str = Field(..., description="Current password for verification")
+    confirmation: str = Field(
+        ...,
+        pattern="^DELETE$",
+        description="Type 'DELETE' exactly to confirm account deletion"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "password": "SecurePass123!",
+                "confirmation": "DELETE"
+            }
+        }
