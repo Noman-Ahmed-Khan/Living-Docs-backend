@@ -1,11 +1,13 @@
-"""FastAPI dependency injection points — using the DI container."""
+"""FastAPI dependency injection points using the DI container."""
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from typing import Generator
 from uuid import UUID
 
-from app.container import get_container, Container
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+
+from app.container import Container, get_container
 from app.config.settings import settings
 
 # Application services
@@ -31,18 +33,16 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
 )
 
 
-# ----------------------------------------------------------------
 # Database session
-# ----------------------------------------------------------------
 
-def get_db(container: Container = Depends(get_container)) -> Session:
+def get_db(
+    container: Container = Depends(get_container),
+) -> Generator[Session, None, None]:
     """Database session dependency."""
-    return next(container.get_db())
+    yield from container.get_db()
 
 
-# ----------------------------------------------------------------
 # Document services
-# ----------------------------------------------------------------
 
 def get_document_service(
     db: Session = Depends(get_db),
@@ -70,9 +70,7 @@ def get_vector_store(
     return container.vector_store()
 
 
-# ----------------------------------------------------------------
 # Auth & User services
-# ----------------------------------------------------------------
 
 def get_auth_service(
     db: Session = Depends(get_db),
@@ -88,9 +86,7 @@ def get_user_service(
     return container.user_service(db)
 
 
-# ----------------------------------------------------------------
 # Project service
-# ----------------------------------------------------------------
 
 def get_project_service(
     db: Session = Depends(get_db),
@@ -99,9 +95,7 @@ def get_project_service(
     return container.project_service(db)
 
 
-# ----------------------------------------------------------------
 # Chat service
-# ----------------------------------------------------------------
 
 def get_chat_service(
     db: Session = Depends(get_db),
@@ -110,9 +104,7 @@ def get_chat_service(
     return container.chat_service(db)
 
 
-# ----------------------------------------------------------------
 # Current user dependencies (resolve User domain entity from JWT)
-# ----------------------------------------------------------------
 
 async def get_current_user(
     db: Session = Depends(get_db),
@@ -184,9 +176,7 @@ async def get_current_superuser(
     return current_user
 
 
-# ----------------------------------------------------------------
-# request utility dependencies
-# ----------------------------------------------------------------
+# Request utility dependencies
 
 def get_client_ip(request: Request) -> str:
     """Extract client IP from request."""

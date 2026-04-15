@@ -1,12 +1,12 @@
 """Project application service."""
 
 import logging
-from typing import List, Optional
+from typing import Callable, List, Optional
 from uuid import UUID
 
 from app.domain.projects.entities import Project, ProjectStatus
 from app.domain.projects.interfaces import IProjectRepository
-from app.domain.projects.exceptions import ProjectNotFoundError, ProjectArchivedError
+from app.domain.projects.exceptions import ProjectNotFoundError
 from .dto import ProjectDTO, ProjectStatsDTO, ProjectWithStatsDTO, ProjectListDTO
 
 logger = logging.getLogger(__name__)
@@ -18,10 +18,10 @@ class ProjectService:
     def __init__(
         self,
         project_repo: IProjectRepository,
-        vector_store=None,  # Optional — used for vector cleanup on delete
+        vector_store_factory: Optional[Callable[[], object]] = None,
     ):
         self._project_repo = project_repo
-        self._vector_store = vector_store
+        self._vector_store_factory = vector_store_factory
 
     async def create_project(
         self,
@@ -168,10 +168,10 @@ class ProjectService:
         if not project:
             raise ProjectNotFoundError(f"Project {project_id} not found")
 
-        # Delete vectors if vector store is available
-        if self._vector_store:
+        if self._vector_store_factory:
             try:
-                self._vector_store.delete_project(project_id)
+                vector_store = self._vector_store_factory()
+                await vector_store.delete_namespace(str(project_id))
             except Exception as e:
                 logger.warning(f"Vector cleanup failed for project {project_id}: {e}")
 

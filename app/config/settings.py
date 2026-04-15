@@ -10,9 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator, computed_field
 
 
-# ============================================================================
 # RAG CONFIGURATION ENUMS AND DATACLASSES
-# ============================================================================
 
 class ChunkingStrategy(str, Enum):
     """Available chunking strategies."""
@@ -83,9 +81,7 @@ class RAGConfig:
     retrieval_strategy: str = "mmr"
 
 
-# ============================================================================
 # MAIN SETTINGS CLASS
-# ============================================================================
 
 class Settings(BaseSettings):
     """
@@ -107,9 +103,7 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-    # ========================================================================
     # APPLICATION SETTINGS
-    # ========================================================================
 
     PROJECT_NAME: str = "Living Docs"
     API_V1_STR: str = "/api/v1"
@@ -124,9 +118,7 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8000"
 
-    # ========================================================================
     # DATABASE SETTINGS
-    # ========================================================================
 
     DATABASE_URL: Optional[str] = None
 
@@ -136,9 +128,7 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 1800
 
-    # ========================================================================
     # SECURITY / AUTHENTICATION SETTINGS
-    # ========================================================================
 
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
@@ -153,9 +143,7 @@ class Settings(BaseSettings):
     PASSWORD_MIN_LENGTH: int = 8
     REQUIRE_EMAIL_VERIFICATION: bool = False
 
-    # ========================================================================
     # EMAIL SETTINGS
-    # ========================================================================
 
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
@@ -167,32 +155,24 @@ class Settings(BaseSettings):
     SMTP_SSL: bool = False
     EMAIL_TEMPLATES_DIR: str = "app/templates/email"
 
-    # ========================================================================
     # HUGGINGFACE (LLM & EMBEDDINGS)
-    # ========================================================================
 
     HUGGINGFACE_API_KEY: Optional[str] = None
     HUGGINGFACE_LLM_MODEL: str = "bigscience/bloom-560m"
     HUGGINGFACE_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
 
-    # ========================================================================
     # PINECONE VECTOR DATABASE SETTINGS
-    # ========================================================================
 
     PINECONE_API_KEY: Optional[str] = None
     PINECONE_INDEX_NAME: str = "livingdocs"
     PINECONE_ENVIRONMENT: str = "gcp-starter"
 
-    # ========================================================================
     # FILE STORAGE SETTINGS
-    # ========================================================================
 
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE_MB: int = 50
 
-    # ========================================================================
     # RAG PIPELINE SETTINGS
-    # ========================================================================
 
     DEFAULT_CHUNK_SIZE: int = Field(default=1000, ge=100, le=4000)
     DEFAULT_CHUNK_OVERLAP: int = Field(default=200, ge=0, le=1000)
@@ -201,9 +181,7 @@ class Settings(BaseSettings):
     DEFAULT_TEMPERATURE: float = 0.0
     MAX_TOKENS: int = 512
 
-    # ========================================================================
     # COMPUTED PROPERTIES
-    # ========================================================================
 
     @computed_field
     @property
@@ -277,9 +255,26 @@ class Settings(BaseSettings):
             retrieval_strategy=self.DEFAULT_RETRIEVAL_STRATEGY,
         )
 
-    # ========================================================================
     # VALIDATORS
-    # ========================================================================
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def validate_debug_flag(cls, value):
+        """Accept common shell-style debug values without crashing startup."""
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+
+        normalized = str(value).strip().strip('"').strip("'").lower()
+        truthy = {"1", "true", "yes", "on", "debug", "development"}
+        falsy = {"0", "false", "no", "off", "release", "prod", "production"}
+
+        if normalized in truthy:
+            return True
+        if normalized in falsy:
+            return False
+        return value
 
     @field_validator("DEFAULT_RETRIEVAL_STRATEGY")
     @classmethod

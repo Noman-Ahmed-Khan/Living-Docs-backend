@@ -1,7 +1,7 @@
 """Dependency injection container - composition root."""
 
 from functools import lru_cache
-from typing import Generator
+from typing import Generator, Optional
 
 from sqlalchemy.orm import Session
 
@@ -22,7 +22,7 @@ from app.infrastructure.rag.vectorstores.pinecone_store import PineconeVectorSto
 from app.infrastructure.rag.retrievers.document_retriever import create_retriever
 from app.infrastructure.rag.llm.huggingface_client import HuggingFaceLLMClient
 from app.domain.rag.strategies import RetrievalStrategy
-from app.domain.rag.value_objects import ChunkerConfig, RetrieverConfig, QueryConfig
+from app.domain.rag.value_objects import RetrieverConfig, QueryConfig
 
 # User infrastructure
 from app.infrastructure.database.repositories.user_repository import (
@@ -55,44 +55,25 @@ class Container:
     """
 
     def __init__(self):
-        # ----------------------------------------------------------------
-        # Document infrastructure (singletons)
-        # ----------------------------------------------------------------
+        # Document infrastructure
         self._file_storage = LocalFileStore(settings.UPLOAD_DIR)
 
-        # ----------------------------------------------------------------
-        # RAG infrastructure (singletons — heavy initialization)
-        # ----------------------------------------------------------------
+        # RAG infrastructure
         self._chunker = LangChainChunker(
             chunk_size=settings.RAG_CONFIG.chunker_config.chunk_size,
             chunk_overlap=settings.RAG_CONFIG.chunker_config.chunk_overlap,
             min_chunk_size=settings.RAG_CONFIG.chunker_config.min_chunk_size,
         )
-        self._embedder = HuggingFaceEmbedder(
-            model_name=settings.HUGGINGFACE_EMBEDDING_MODEL,
-            device="cpu",
-        )
-        self._vector_store = PineconeVectorStore(
-            api_key=settings.PINECONE_API_KEY,
-            index_name=settings.PINECONE_INDEX_NAME,
-        )
-        self._llm_client = HuggingFaceLLMClient(
-            model_name=settings.HUGGINGFACE_LLM_MODEL,
-            api_key=settings.HUGGINGFACE_API_KEY,
-            temperature=settings.RAG_CONFIG.query_config.temperature,
-            max_tokens=settings.RAG_CONFIG.query_config.max_tokens,
-        )
+        self._embedder: Optional[HuggingFaceEmbedder] = None
+        self._vector_store: Optional[PineconeVectorStore] = None
+        self._llm_client: Optional[HuggingFaceLLMClient] = None
 
-        # ----------------------------------------------------------------
-        # User / auth infrastructure (singletons — stateless)
-        # ----------------------------------------------------------------
+        # User / auth infrastructure
         self._password_hasher = BcryptPasswordHasher()
         self._token_service = JWTTokenService()
         self._email_service = SMTPEmailService()
 
-    # ----------------------------------------------------------------
     # Database
-    # ----------------------------------------------------------------
 
     def get_db(self) -> Generator[Session, None, None]:
         """Database session dependency (for FastAPI Depends)."""
@@ -102,9 +83,38 @@ class Container:
         finally:
             db.close()
 
-    # ----------------------------------------------------------------
+    # Lazy RAG dependencies
+
+    def embedder(self) -> HuggingFaceEmbedder:
+        """Create the embedder only when a RAG workflow needs it."""
+        if self._embedder is None:
+            self._embedder = HuggingFaceEmbedder(
+                model_name=settings.HUGGINGFACE_EMBEDDING_MODEL,
+                device="cpu",
+            )
+        return self._embedder
+
+    def vector_store(self) -> PineconeVectorStore:
+        """Create the vector store lazily to keep unrelated services stable."""
+        if self._vector_store is None:
+            self._vector_store = PineconeVectorStore(
+                api_key=settings.PINECONE_API_KEY,
+                index_name=settings.PINECONE_INDEX_NAME,
+            )
+        return self._vector_store
+
+    def llm_client(self) -> HuggingFaceLLMClient:
+        """Create the LLM client only when query generation is requested."""
+        if self._llm_client is None:
+            self._llm_client = HuggingFaceLLMClient(
+                model_name=settings.HUGGINGFACE_LLM_MODEL,
+                api_key=settings.HUGGINGFACE_API_KEY,
+                temperature=settings.RAG_CONFIG.query_config.temperature,
+                max_tokens=settings.RAG_CONFIG.query_config.max_tokens,
+            )
+        return self._llm_client
+
     # Document repositories & services
-    # ----------------------------------------------------------------
 
     def document_repository(self, db: Session) -> SQLDocumentRepository:
         return SQLDocumentRepository(db)
@@ -120,13 +130,11 @@ class Container:
             document_repo=self.document_repository(db),
             file_storage=self._file_storage,
             chunker=self._chunker,
-            embedder=self._embedder,
-            vector_store=self._vector_store,
+            embedder=self.embedder(),
+            vector_store=self.vector_store(),
         )
 
-    # ----------------------------------------------------------------
     # RAG query service
-    # ----------------------------------------------------------------
 
     def query_service(self) -> QueryService:
         retriever_config = RetrieverConfig(
@@ -137,8 +145,8 @@ class Container:
         )
         retriever = create_retriever(
             strategy=RetrievalStrategy(settings.RAG_CONFIG.retrieval_strategy),
-            embedder=self._embedder,
-            vector_store=self._vector_store,
+            embedder=self.embedder(),
+            vector_store=self.vector_store(),
             config=retriever_config,
         )
         query_config = QueryConfig(
@@ -149,14 +157,12 @@ class Container:
         )
         return QueryService(
             retriever=retriever,
-            llm_client=self._llm_client,
+            llm_client=self.llm_client(),
             retriever_config=retriever_config,
             query_config=query_config,
         )
 
-    # ----------------------------------------------------------------
     # User / auth repositories & services
-    # ----------------------------------------------------------------
 
     def user_repository(self, db: Session) -> SQLUserRepository:
         return SQLUserRepository(db)
@@ -180,9 +186,7 @@ class Container:
             password_hasher=self._password_hasher,
         )
 
-    # ----------------------------------------------------------------
     # Project repositories & services
-    # ----------------------------------------------------------------
 
     def project_repository(self, db: Session) -> SQLProjectRepository:
         return SQLProjectRepository(db)
@@ -190,12 +194,10 @@ class Container:
     def project_service(self, db: Session) -> ProjectService:
         return ProjectService(
             project_repo=self.project_repository(db),
-            vector_store=self._vector_store,
+            vector_store_factory=self.vector_store,
         )
 
-    # ----------------------------------------------------------------
     # Chat repositories & services
-    # ----------------------------------------------------------------
 
     def chat_repository(self, db: Session) -> SQLChatRepository:
         return SQLChatRepository(db)
@@ -209,5 +211,5 @@ class Container:
 
 @lru_cache(maxsize=1)
 def get_container() -> Container:
-    """Get singleton container instance."""
+    """Get a singleton container instance."""
     return Container()

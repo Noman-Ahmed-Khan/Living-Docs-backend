@@ -14,7 +14,6 @@ from app.api.middleware.error_handler import (
 )
 from app.container import get_container
 from app.api.v1.router import api_v1_router
-from app.infrastructure.database.session import engine, Base, SessionLocal
 from app.config.settings import settings
 from app.domain.common.exceptions import DomainException
 
@@ -25,10 +24,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
 
 
 @asynccontextmanager
@@ -197,5 +192,6 @@ def root():
         "message": "Welcome to Living Docs API",
         "version": "1.0.0",
         "docs": "/docs",
-        "health": "/health"
+        "health": f"{settings.API_V1_STR}/health",
+        "live": f"{settings.API_V1_STR}/health/live",
     }
