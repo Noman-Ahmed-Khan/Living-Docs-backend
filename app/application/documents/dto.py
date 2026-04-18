@@ -38,4 +38,6 @@ class DocumentDetailDTO:
     chunk_count: int
     page_count: Optional[int]
     created_at: datetime
+    updated_at: datetime
     processed_at: Optional[datetime]
+    file_path: str

@@ -19,7 +19,12 @@ class IngestionService:
     """
     Orchestrates document ingestion pipeline.
 
-    Flow: Load file → Chunk → Embed → Store in vector DB → Update status
+    Flow: Load file → Chunk (parent+child) → Embed → Store in vector DB → Update status
+
+    The chunker produces a mixed list of parent and child Chunk entities.
+    Both are embedded and stored in Pinecone so that:
+      - Child chunks are used for similarity search
+      - Parent chunks can be fetched by ID for context resolution
     """
 
     def __init__(
@@ -66,39 +71,67 @@ class IngestionService:
             # 2. Read file from storage
             file_data = await self._file_storage.read(document.file_path)
 
-            # 3. Chunk the document
-            chunks = await self._chunker.chunk(
+            # 3. Chunk the document (returns parent + child chunks)
+            all_chunks = await self._chunker.chunk(
                 file_data=file_data,
                 filename=document.original_filename,
                 document_id=document_id
             )
 
-            logger.info(f"Created {len(chunks)} chunks for document {document_id}")
+            if not all_chunks:
+                logger.warning(f"No chunks produced for document {document_id}")
+                document.mark_completed(chunk_count=0, character_count=0)
+                await self._document_repo.save(document)
+                return IngestionResultDTO(
+                    document_id=document_id,
+                    success=True,
+                    chunk_count=0,
+                    message="Document processed but no content extracted"
+                )
 
-            # 4. Embed chunks
-            chunk_texts = [chunk.text for chunk in chunks]
+            # Separate parent and child chunks for logging
+            parent_chunks = [
+                c for c in all_chunks
+                if isinstance(c.metadata, dict) and c.metadata.get("chunk_type") == "parent"
+            ]
+            child_chunks = [
+                c for c in all_chunks
+                if not isinstance(c.metadata, dict) or c.metadata.get("chunk_type") != "parent"
+            ]
+
+            logger.info(
+                f"Created {len(parent_chunks)} parent + {len(child_chunks)} child "
+                f"= {len(all_chunks)} total chunks for document {document_id}"
+            )
+
+            # 4. Embed ALL chunks (both parent and child)
+            # Parents need to exist in Pinecone for fetch_by_ids to work
+            chunk_texts = [chunk.text for chunk in all_chunks]
             embeddings = await self._embedder.embed_batch(chunk_texts)
 
             # 5. Store in vector database
             await self._vector_store.add_chunks(
-                chunks=chunks,
+                chunks=all_chunks,
                 embeddings=embeddings,
                 namespace=str(project_id)
             )
 
-            # 6. Mark as completed
+            # 6. Mark as completed (report child count as the meaningful metric)
             document.mark_completed(
-                chunk_count=len(chunks),
-                character_count=sum(len(c.text) for c in chunks)
+                chunk_count=len(child_chunks),
+                character_count=sum(len(c.text) for c in all_chunks)
             )
             await self._document_repo.save(document)
 
-            logger.info(f"Document {document_id} ingestion completed successfully")
+            logger.info(
+                f"Document {document_id} ingestion completed successfully "
+                f"({len(child_chunks)} child chunks, {len(parent_chunks)} parent chunks)"
+            )
 
             return IngestionResultDTO(
                 document_id=document_id,
                 success=True,
-                chunk_count=len(chunks),
+                chunk_count=len(child_chunks),
                 message="Document ingested successfully"
             )
 

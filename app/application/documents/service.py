@@ -112,7 +112,9 @@ class DocumentService:
             chunk_count=document.chunk_count,
             page_count=document.page_count,
             created_at=document.created_at,
-            processed_at=document.processed_at
+            updated_at=document.updated_at,
+            processed_at=document.processed_at,
+            file_path=document.file_path
         )
 
     async def list_documents(
@@ -143,7 +145,9 @@ class DocumentService:
                 chunk_count=doc.chunk_count,
                 page_count=doc.page_count,
                 created_at=doc.created_at,
-                processed_at=doc.processed_at
+                updated_at=doc.updated_at,
+                processed_at=doc.processed_at,
+                file_path=doc.file_path
             )
             for doc in documents
         ]
@@ -199,5 +203,7 @@ class DocumentService:
             chunk_count=saved.chunk_count,
             page_count=saved.page_count,
             created_at=saved.created_at,
-            processed_at=saved.processed_at
+            updated_at=saved.updated_at,
+            processed_at=saved.processed_at,
+            file_path=saved.file_path
         )
