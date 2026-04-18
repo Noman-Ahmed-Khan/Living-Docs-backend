@@ -1,7 +1,7 @@
 """Document-related Pydantic schemas."""
 
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
@@ -11,6 +11,12 @@ class DocumentStatus(str, Enum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class BulkUploadStatus(str, Enum):
+    """Bulk upload result status."""
+    SUCCESS = "success"
     FAILED = "failed"
 
 
@@ -83,6 +89,38 @@ class DocumentDetail(Document):
     content_type: Optional[str] = Field(None, description="MIME content type")
     file_path: str = Field(..., description="Internal file storage path")
 
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": "770e8400-e29b-41d4-a716-446655440000",
+                "filename": "report.pdf",
+                "original_filename": "report.pdf",
+                "project_id": "660e8400-e29b-41d4-a716-446655440000",
+                "file_size": 1024000,
+                "file_type": "pdf",
+                "status": "completed",
+                "status_message": None,
+                "chunk_count": 25,
+                "page_count": 12,
+                "character_count": 50000,
+                "created_at": "2024-03-08T10:00:00Z",
+                "updated_at": "2024-03-08T10:05:00Z",
+                "processed_at": "2024-03-08T10:05:00Z",
+                "content_type": "application/pdf",
+                "file_path": "./uploads/report.pdf"
+            }
+        }
+    )
+
+
+class BulkUploadItem(BaseModel):
+    """Single document entry in a bulk upload response."""
+    document_id: Optional[str] = Field(None, description="Uploaded document ID")
+    filename: str = Field(..., description="Document filename")
+    status: BulkUploadStatus = Field(..., description="Upload result status")
+    error: Optional[str] = Field(None, description="Error message when upload fails")
+
 
 class DocumentUploadResponse(BaseModel):
     """Response after document upload."""
@@ -110,6 +148,33 @@ class DocumentList(BaseModel):
     page_size: int = Field(..., description="Items per page")
     pages: int = Field(..., description="Total number of pages")
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "items": [
+                    {
+                        "id": "770e8400-e29b-41d4-a716-446655440000",
+                        "filename": "report.pdf",
+                        "original_filename": "report.pdf",
+                        "project_id": "660e8400-e29b-41d4-a716-446655440000",
+                        "file_size": 1024000,
+                        "file_type": "pdf",
+                        "status": "completed",
+                        "chunk_count": 25,
+                        "character_count": 50000,
+                        "created_at": "2024-03-08T10:00:00Z",
+                        "updated_at": "2024-03-08T10:05:00Z",
+                        "processed_at": "2024-03-08T10:05:00Z"
+                    }
+                ],
+                "total": 1,
+                "page": 1,
+                "page_size": 20,
+                "pages": 1
+            }
+        }
+    )
+
 
 class DocumentIngestionStatus(BaseModel):
     """Document ingestion status details."""
@@ -122,34 +187,79 @@ class DocumentIngestionStatus(BaseModel):
     started_at: Optional[datetime] = Field(None, description="Processing start time")
     completed_at: Optional[datetime] = Field(None, description="Processing completion time")
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "document_id": "770e8400-e29b-41d4-a716-446655440000",
+                "status": "processing",
+                "message": "Document is being processed",
+                "progress": 0.45,
+                "chunks_created": 12,
+                "pages_processed": 8,
+                "started_at": "2024-03-08T10:01:00Z",
+                "completed_at": None
+            }
+        }
+    )
+
 
 class BulkUploadResponse(BaseModel):
     """Response for bulk upload."""
     successfully_uploaded: int = Field(..., description="Number of successfully uploaded documents")
     failed_uploads: int = Field(..., description="Number of failed uploads")
-    documents: List[Dict[str, Any]] = Field(..., description="Details of each upload attempt")
+    documents: List[BulkUploadItem] = Field(..., description="Details of each upload attempt")
+    total_uploaded: int = Field(..., description="Total number of uploaded documents")
+    total_failed: int = Field(..., description="Total number of failed documents")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "successfully_uploaded": 3,
-                "failed_uploads": 0,
+                "successfully_uploaded": 2,
+                "failed_uploads": 1,
                 "documents": [
                     {
                         "document_id": "770e8400-e29b-41d4-a716-446655440001",
                         "filename": "report1.pdf",
                         "status": "success"
+                    },
+                    {
+                        "document_id": "770e8400-e29b-41d4-a716-446655440002",
+                        "filename": "report2.pdf",
+                        "status": "success"
+                    },
+                    {
+                        "filename": "broken.xlsx",
+                        "status": "failed",
+                        "error": "File type is not supported"
                     }
-                ]
+                ],
+                "total_uploaded": 2,
+                "total_failed": 1
             }
         }
-
-    total_uploaded: int
-    total_failed: int
 
 
 class ReingestionRequest(BaseModel):
     """Request to re-ingest a document."""
-    chunk_size: Optional[int] = Field(None, ge=100, le=4000)
-    chunk_overlap: Optional[int] = Field(None, ge=0, le=1000)
+    chunk_size: Optional[int] = Field(
+        None,
+        ge=100,
+        le=4000,
+        description="Optional chunk size override for re-ingestion"
+    )
+    chunk_overlap: Optional[int] = Field(
+        None,
+        ge=0,
+        le=1000,
+        description="Optional chunk overlap override for re-ingestion"
+    )
     force: bool = Field(default=False, description="Force re-ingestion even if completed")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "chunk_size": 1200,
+                "chunk_overlap": 200,
+                "force": False
+            }
+        }

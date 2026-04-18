@@ -111,7 +111,7 @@ async def domain_exception_handler(request: Request, exc: DomainException):
         f"Domain exception: {exc.__class__.__name__}",
         extra={
             "exception": exc.__class__.__name__,
-            "message": exc.message,
+            "error_message": exc.message,
             "details": exc.details,
             "path": request.url.path,
             "method": request.method,

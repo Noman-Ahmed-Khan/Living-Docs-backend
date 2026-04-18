@@ -36,15 +36,17 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     """User profile update request."""
-    email: Optional[EmailStr] = Field(
+    full_name: Optional[str] = Field(
         None,
-        description="New email address (use /auth/change-email endpoint)"
+        min_length=1,
+        max_length=255,
+        description="New display name for the account"
     )
 
     class Config:
         json_schema_extra = {
             "example": {
-                "email": "newemail@example.com"
+                "full_name": "Jane Doe"
             }
         }
 
@@ -75,6 +77,7 @@ class PasswordReset(BaseModel):
 class User(UserBase):
     """User profile response."""
     id: UUID = Field(..., description="User's unique identifier")
+    full_name: Optional[str] = Field(None, description="User's display name")
     is_active: bool = Field(..., description="Whether the account is active")
     is_verified: bool = Field(..., description="Whether email is verified")
     created_at: datetime = Field(..., description="Account creation timestamp")
@@ -85,6 +88,7 @@ class User(UserBase):
         json_schema_extra = {
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
+                "full_name": "Jane Doe",
                 "email": "user@example.com",
                 "is_active": True,
                 "is_verified": True,
@@ -101,6 +105,51 @@ class UserProfile(User):
 
     class Config:
         from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "full_name": "Jane Doe",
+                "email": "user@example.com",
+                "is_active": True,
+                "is_verified": True,
+                "created_at": "2024-03-01T10:00:00Z",
+                "last_login_at": "2024-03-08T14:20:00Z",
+                "updated_at": "2024-03-08T15:00:00Z",
+                "password_changed_at": "2024-03-01T10:00:00Z"
+            }
+        }
+
+
+class SecurityInfo(BaseModel):
+    """Security-related information for the current user."""
+    email: str = Field(..., description="User's email address")
+    is_verified: bool = Field(..., description="Whether email is verified")
+    password_changed_at: Optional[datetime] = Field(
+        None, description="Last password change timestamp"
+    )
+    last_login_at: Optional[datetime] = Field(
+        None, description="Last login timestamp"
+    )
+    created_at: Optional[datetime] = Field(
+        None, description="Account creation timestamp"
+    )
+    failed_login_attempts: int = Field(
+        0, description="Consecutive failed login attempts"
+    )
+    is_locked: bool = Field(..., description="Whether the account is currently locked")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com",
+                "is_verified": True,
+                "password_changed_at": "2024-03-01T10:00:00Z",
+                "last_login_at": "2024-03-08T14:20:00Z",
+                "created_at": "2024-03-01T10:00:00Z",
+                "failed_login_attempts": 0,
+                "is_locked": False
+            }
+        }
 
 
 class DeleteAccountRequest(BaseModel):

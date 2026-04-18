@@ -124,7 +124,9 @@ async def query_documents(
                     page=c.page,
                     char_start=c.char_start,
                     char_end=c.char_end,
-                    relevance_score=c.relevance_score
+                    relevance_score=c.relevance_score,
+                    bbox=query_schema.BoundingBox(**c.bbox) if c.bbox else None,
+                    parent_id=c.parent_id,
                 )
                 for c in result.citations
             ],
@@ -182,7 +184,7 @@ async def find_similar_chunks(
     try:
         # Execute similar search via service
         chunks = await query_service.find_similar(
-            text=request.text,
+            text=request.query,
             project_id=UUID(request.project_id),
             user_id=current_user.id,
             document_ids=[UUID(doc_id) for doc_id in request.document_ids] if request.document_ids else None,
@@ -191,7 +193,7 @@ async def find_similar_chunks(
         )
         
         return query_schema.SimilarChunksResponse(
-            query_text=request.text,
+            query=request.query,
             chunks=[
                 query_schema.Citation(
                     chunk_id=c.chunk_id,
@@ -201,7 +203,11 @@ async def find_similar_chunks(
                     page=c.metadata.page if hasattr(c.metadata, 'page') else c.metadata.get('page'),
                     char_start=c.metadata.char_start if hasattr(c.metadata, 'char_start') else c.metadata.get('char_start'),
                     char_end=c.metadata.char_end if hasattr(c.metadata, 'char_end') else c.metadata.get('char_end'),
-                    relevance_score=c.score if hasattr(c, 'score') else None
+                    relevance_score=c.score if hasattr(c, 'score') else None,
+                    bbox=query_schema.BoundingBox(
+                        x0=c.bbox.x0, y0=c.bbox.y0, x1=c.bbox.x1, y1=c.bbox.y1
+                    ) if c.bbox else None,
+                    parent_id=c.parent_id if hasattr(c, 'parent_id') else None,
                 )
                 for c in chunks
             ]

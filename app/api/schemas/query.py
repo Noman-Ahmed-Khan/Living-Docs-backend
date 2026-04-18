@@ -12,9 +12,28 @@ class RetrievalStrategy(str, Enum):
     HYBRID = "hybrid"  # Combines similarity and keyword search
 
 
+class BoundingBox(BaseModel):
+    """Bounding box coordinates for PDF highlighting."""
+    x0: float = Field(..., description="Left edge x-coordinate")
+    y0: float = Field(..., description="Top edge y-coordinate")
+    x1: float = Field(..., description="Right edge x-coordinate")
+    y1: float = Field(..., description="Bottom edge y-coordinate")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "x0": 72.0,
+                "y0": 120.5,
+                "x1": 540.0,
+                "y1": 145.3,
+            }
+        }
+    )
+
+
 class Citation(BaseModel):
-    """Represents a citation to a source document chunk with character-level precision."""
-    
+    """Represents a citation to a source document chunk with coordinate-level precision."""
+
     chunk_id: str = Field(
         ...,
         description="Unique identifier for the chunk"
@@ -47,7 +66,15 @@ class Citation(BaseModel):
         None,
         description="Relevance score from retrieval (0.0 to 1.0)"
     )
-    
+    bbox: Optional[BoundingBox] = Field(
+        None,
+        description="Bounding box coordinates for PDF highlighting (x0, y0, x1, y1)"
+    )
+    parent_id: Optional[str] = Field(
+        None,
+        description="ID of the parent chunk (paragraph/section) this sentence belongs to"
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -58,7 +85,14 @@ class Citation(BaseModel):
                 "char_start": 1245,
                 "char_end": 1450,
                 "text_snippet": "The quarterly results show a 45% increase in user engagement...",
-                "relevance_score": 0.92
+                "relevance_score": 0.92,
+                "bbox": {
+                    "x0": 72.0,
+                    "y0": 120.5,
+                    "x1": 540.0,
+                    "y1": 145.3,
+                },
+                "parent_id": "parent-abc-123",
             }
         }
     )
@@ -66,14 +100,14 @@ class Citation(BaseModel):
 
 class QueryRequest(BaseModel):
     """Request schema for RAG-based document queries."""
-    
+
     project_id: str = Field(
         ...,
         description="Project ID to query (UUID)"
     )
     question: str = Field(
-        ..., 
-        min_length=1, 
+        ...,
+        min_length=1,
         max_length=2000,
         description="The question to ask about the documents"
     )
@@ -115,8 +149,8 @@ class QueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    """Response schema for RAG queries with citations."""
-    
+    """Response schema for RAG queries with citations and coordinate metadata."""
+
     query_id: Optional[str] = Field(
         None,
         description="Unique identifier for this query"
@@ -127,18 +161,18 @@ class QueryResponse(BaseModel):
     )
     citations: List[Citation] = Field(
         default_factory=list,
-        description="Source citations supporting the answer with character-level precision"
+        description="Source citations with bounding box coordinates for PDF highlighting"
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
         description="Performance and processing metadata"
     )
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "query_id": "880e8400-e29b-41d4-a716-446655440000",
-                "answer": "The main findings indicate that user engagement increased by 45% [doc456#abc123] after implementing the new feature. Revenue growth was attributed to improved retention [doc456#def789].",
+                "answer": "The main findings indicate that user engagement increased by 45% [abc123] after implementing the new feature.",
                 "citations": [
                     {
                         "chunk_id": "abc123",
@@ -148,7 +182,14 @@ class QueryResponse(BaseModel):
                         "char_start": 1250,
                         "char_end": 1290,
                         "text_snippet": "user engagement increased by 45%",
-                        "relevance_score": 0.92
+                        "relevance_score": 0.92,
+                        "bbox": {
+                            "x0": 72.0,
+                            "y0": 320.5,
+                            "x1": 540.0,
+                            "y1": 345.3,
+                        },
+                        "parent_id": "parent-abc-123",
                     }
                 ],
                 "metadata": {
@@ -165,7 +206,7 @@ class QueryResponse(BaseModel):
 
 class SimilarChunksRequest(BaseModel):
     """Request to find similar chunks without generating an answer."""
-    
+
     project_id: str = Field(
         ...,
         description="Project ID (UUID)"
@@ -200,7 +241,7 @@ class SimilarChunksRequest(BaseModel):
 
 class SimilarChunksResponse(BaseModel):
     """Response with similar chunks."""
-    
+
     query: str = Field(..., description="The query that was searched")
     chunks: List[Citation] = Field(..., description="Similar chunks ranked by relevance")
 
@@ -217,7 +258,14 @@ class SimilarChunksResponse(BaseModel):
                         "char_start": 1250,
                         "char_end": 1450,
                         "text_snippet": "User engagement increased by 45% compared to previous quarter...",
-                        "relevance_score": 0.96
+                        "relevance_score": 0.96,
+                        "bbox": {
+                            "x0": 72.0,
+                            "y0": 320.5,
+                            "x1": 540.0,
+                            "y1": 345.3,
+                        },
+                        "parent_id": "parent-abc-123",
                     }
                 ]
             }

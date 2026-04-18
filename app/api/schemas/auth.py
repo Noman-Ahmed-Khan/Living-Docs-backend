@@ -76,15 +76,36 @@ class VerifyEmailRequest(BaseModel):
     """Email verification request."""
     token: str = Field(..., description="Verification token received in email")
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            }
+        }
+
 
 class ResendVerificationRequest(BaseModel):
     """Request to resend verification email."""
     email: EmailStr = Field(..., description="Email address to send verification to")
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com"
+            }
+        }
+
 
 class ForgotPasswordRequest(BaseModel):
     """Password reset request."""
     email: EmailStr = Field(..., description="Email address for password reset")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "user@example.com"
+            }
+        }
 
 
 class ResetPasswordRequest(BaseModel):
@@ -96,6 +117,14 @@ class ResetPasswordRequest(BaseModel):
         description="New password (8+ chars with uppercase, lowercase, digit, special)"
     )
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "new_password": "NewSecurePass123!"
+            }
+        }
+
 
 class ChangePasswordRequest(BaseModel):
     """Change password for authenticated user."""
@@ -106,11 +135,27 @@ class ChangePasswordRequest(BaseModel):
         description="New password (8+ chars with uppercase, lowercase, digit, special)"
     )
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "current_password": "CurrentPass123!",
+                "new_password": "NewSecurePass123!"
+            }
+        }
+
 
 class ChangeEmailRequest(BaseModel):
     """Change email for authenticated user."""
     new_email: EmailStr = Field(..., description="New email address")
     password: str = Field(..., description="Current password for verification")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "new_email": "newemail@example.com",
+                "password": "CurrentPass123!"
+            }
+        }
 
 
 class SessionInfo(BaseModel):
@@ -124,12 +169,39 @@ class SessionInfo(BaseModel):
 
     class Config:
         from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "990e8400-e29b-41d4-a716-446655440000",
+                "device_info": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "ip_address": "127.0.0.1",
+                "created_at": "2024-03-08T14:00:00Z",
+                "expires_at": "2024-03-15T14:00:00Z",
+                "is_current": True
+            }
+        }
 
 
 class SessionList(BaseModel):
     """List of sessions for a user."""
     sessions: list[SessionInfo] = Field(..., description="List of active sessions")
     total: int = Field(..., description="Total number of sessions")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "sessions": [
+                    {
+                        "id": "990e8400-e29b-41d4-a716-446655440000",
+                        "device_info": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                        "ip_address": "127.0.0.1",
+                        "created_at": "2024-03-08T14:00:00Z",
+                        "expires_at": "2024-03-15T14:00:00Z",
+                        "is_current": True
+                    }
+                ],
+                "total": 1
+            }
+        }
 
 
 class MessageResponse(BaseModel):
@@ -150,3 +222,13 @@ class AuthStatus(BaseModel):
     is_verified: bool = Field(..., description="Whether user's email is verified")
     email: str = Field(..., description="User's email address")
     user_id: UUID = Field(..., description="User's unique identifier")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "is_authenticated": True,
+                "is_verified": True,
+                "email": "user@example.com",
+                "user_id": "550e8400-e29b-41d4-a716-446655440000"
+            }
+        }

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
 from fastapi.openapi.utils import get_openapi
+from pydantic import BaseModel, Field
 from app.api import auth, users, projects, documents, query, health, chat
 from app.api.middleware.error_handler import (
     domain_exception_handler,
@@ -94,6 +95,28 @@ tags_metadata = [
     },
 ]
 
+
+class RootResponse(BaseModel):
+    """Root endpoint response."""
+
+    message: str = Field(..., description="Welcome message")
+    version: str = Field(..., description="Application version")
+    docs: str = Field(..., description="Swagger UI path")
+    health: str = Field(..., description="Health check endpoint path")
+    live: str = Field(..., description="Liveness endpoint path")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Welcome to Living Docs API",
+                "version": "1.0.0",
+                "docs": "/docs",
+                "health": "/api/v1/health",
+                "live": "/api/v1/health/live"
+            }
+        }
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="AI-powered document intelligence system with RAG (Retrieval Augmented Generation) capabilities. "
@@ -176,7 +199,7 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 
-@app.get("/test-upload", response_class=HTMLResponse)
+@app.get("/test-upload", response_class=HTMLResponse, summary="Test upload page")
 async def get_test_upload():
     """Endpoint for testing document uploads."""
     template_path = Path("app/templates/test_upload.html")
@@ -185,7 +208,7 @@ async def get_test_upload():
     return template_path.read_text()
 
 
-@app.get("/")
+@app.get("/", response_model=RootResponse, summary="API root")
 def root():
     """Root endpoint."""
     return {

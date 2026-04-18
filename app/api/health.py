@@ -1,9 +1,11 @@
 """Health check endpoints."""
 
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -17,9 +19,61 @@ router = APIRouter()
 class HealthResponse(BaseModel):
     """Health check response."""
 
-    status: str
-    version: str
-    services: Dict[str, Any]
+    status: str = Field(..., description="Overall API health status")
+    version: str = Field(..., description="Application version")
+    services: Dict[str, ServiceHealth] = Field(
+        ...,
+        description="Health status for dependent services"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "healthy",
+                "version": "1.0.0",
+                "services": {
+                    "database": {
+                        "status": "healthy"
+                    },
+                    "vectorstore": {
+                        "status": "healthy",
+                        "total_vectors": 128,
+                        "index": "livingdocs"
+                    }
+                }
+            }
+        }
+
+
+class ServiceHealth(BaseModel):
+    """Health details for a single dependency."""
+
+    status: str = Field(..., description="Service status")
+    error: Optional[str] = Field(None, description="Error details if the service is unhealthy")
+    total_vectors: Optional[int] = Field(None, description="Total number of vectors stored")
+    index: Optional[str] = Field(None, description="Vector index name")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "healthy",
+                "total_vectors": 128,
+                "index": "livingdocs"
+            }
+        }
+
+
+class SimpleStatusResponse(BaseModel):
+    """Simple status response used by readiness and liveness checks."""
+
+    status: str = Field(..., description="Current service status")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "ready"
+            }
+        }
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -66,13 +120,13 @@ async def health_check(
     )
 
 
-@router.get("/health/ready")
+@router.get("/health/ready", response_model=SimpleStatusResponse, summary="Readiness check")
 async def readiness_check():
     """Simple readiness check for load balancers."""
-    return {"status": "ready"}
+    return SimpleStatusResponse(status="ready")
 
 
-@router.get("/health/live")
+@router.get("/health/live", response_model=SimpleStatusResponse, summary="Liveness check")
 async def liveness_check():
     """Simple liveness check for container orchestration."""
-    return {"status": "alive"}
+    return SimpleStatusResponse(status="alive")

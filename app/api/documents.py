@@ -130,7 +130,7 @@ async def upload_document(
 )
 async def bulk_upload_documents(
     background_tasks: BackgroundTasks,
-    project_id: UUID = Form(...),
+    project_id: UUID = Form(..., description="Project ID to upload to"),
     files: List[UploadFile] = File(..., description="Document files to upload"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_verified_user),
@@ -188,9 +188,26 @@ async def bulk_upload_documents(
                     "error": str(e)
                 })
         
+        documents = [
+            {
+                "document_id": str(item["document_id"]),
+                "filename": item["filename"],
+                "status": "success",
+            }
+            for item in uploaded
+        ] + [
+            {
+                "filename": item["filename"],
+                "status": "failed",
+                "error": item["error"],
+            }
+            for item in failed
+        ]
+
         return document_schema.BulkUploadResponse(
-            uploaded=uploaded,
-            failed=failed,
+            successfully_uploaded=len(uploaded),
+            failed_uploads=len(failed),
+            documents=documents,
             total_uploaded=len(uploaded),
             total_failed=len(failed)
         )
@@ -212,9 +229,13 @@ async def bulk_upload_documents(
 )
 async def list_documents(
     project_id: UUID,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    status_filter: Optional[document_schema.DocumentStatus] = Query(None, alias="status"),
+    page: int = Query(1, ge=1, description="Page number to fetch"),
+    page_size: int = Query(20, ge=1, le=100, description="Number of documents per page"),
+    status_filter: Optional[document_schema.DocumentStatus] = Query(
+        None,
+        alias="status",
+        description="Optional filter by document processing status"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_verified_user),
     project_service: ProjectService = Depends(get_project_service),
@@ -265,7 +286,7 @@ async def list_documents(
 )
 async def get_document(
     document_id: UUID,
-    project_id: UUID = Query(..., description="Project ID"),
+    project_id: UUID = Query(..., description="Project ID that owns the document"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_verified_user),
     project_service: ProjectService = Depends(get_project_service),
@@ -308,7 +329,7 @@ async def get_document(
 )
 async def get_document_status(
     document_id: UUID,
-    project_id: UUID = Query(...),
+    project_id: UUID = Query(..., description="Project ID that owns the document"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_verified_user),
     project_service: ProjectService = Depends(get_project_service),
@@ -359,7 +380,7 @@ async def reingest_document(
     document_id: UUID,
     background_tasks: BackgroundTasks,
     request: document_schema.ReingestionRequest,
-    project_id: UUID = Query(...),
+    project_id: UUID = Query(..., description="Project ID that owns the document"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_verified_user),
     project_service: ProjectService = Depends(get_project_service),
@@ -436,7 +457,7 @@ async def reingest_document(
 )
 async def delete_document(
     document_id: UUID,
-    project_id: UUID = Query(...),
+    project_id: UUID = Query(..., description="Project ID that owns the document"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_verified_user),
     project_service: ProjectService = Depends(get_project_service),

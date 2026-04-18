@@ -146,6 +146,32 @@ class ProjectWithStats(Project):
     """Project with statistics."""
     stats: ProjectStats = Field(..., description="Project statistics")
 
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": "660e8400-e29b-41d4-a716-446655440000",
+                "name": "My Research Project",
+                "description": "Documentation for my research",
+                "owner_id": "550e8400-e29b-41d4-a716-446655440000",
+                "status": "active",
+                "chunk_size": 1000,
+                "chunk_overlap": 200,
+                "created_at": "2024-03-08T10:00:00Z",
+                "updated_at": "2024-03-08T10:00:00Z",
+                "stats": {
+                    "document_count": 15,
+                    "completed_documents": 12,
+                    "failed_documents": 1,
+                    "pending_documents": 2,
+                    "processing_documents": 0,
+                    "total_chunks": 3450,
+                    "total_size_bytes": 1250000
+                }
+            }
+        }
+    )
+
 
 class ProjectList(BaseModel):
     """Paginated project list."""

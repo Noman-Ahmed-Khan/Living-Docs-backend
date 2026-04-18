@@ -1,7 +1,7 @@
 """Authentication API routes."""
 
 from typing import Any
-from fastapi import APIRouter, Depends, status, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, status, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from uuid import UUID
@@ -51,7 +51,13 @@ async def verify_email(
     return {"message": message}
 
 
-@router.get("/verify-email")
+@router.get(
+    "/verify-email",
+    response_class=RedirectResponse,
+    status_code=status.HTTP_302_FOUND,
+    summary="Verify email from link",
+    responses={302: {"description": "Redirects to the frontend login page"}},
+)
 async def verify_email_get(
     token: str,
     auth_service: AuthService = Depends(get_auth_service)
@@ -60,11 +66,13 @@ async def verify_email_get(
     try:
         message = await auth_service.verify_email(token=token)
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/login?message={message}"
+            url=f"{settings.FRONTEND_URL}/login?message={message}",
+            status_code=status.HTTP_302_FOUND,
         )
     except Exception as e:
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}/login?error={str(e)}"
+            url=f"{settings.FRONTEND_URL}/login?error={str(e)}",
+            status_code=status.HTTP_302_FOUND,
         )
 
 
@@ -176,41 +184,25 @@ async def reset_password(
     return {"message": message}
 
 
-@router.get("/reset-password")
+@router.get(
+    "/reset-password",
+    response_class=RedirectResponse,
+    status_code=status.HTTP_302_FOUND,
+    summary="Open password reset form",
+    responses={302: {"description": "Redirects to the frontend password reset page"}},
+)
 async def reset_password_get(token: str) -> Any:
     """Verify reset token and redirect to frontend reset password form."""
     # We do the redirect directly since we don't have a specific ResetRequest object here
     # The frontend will call the POST /reset-password later
     return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/reset-password?token={token}"
+        url=f"{settings.FRONTEND_URL}/reset-password?token={token}",
+        status_code=status.HTTP_302_FOUND,
     )
 
 
 @router.post("/change-password", response_model=auth_schema.MessageResponse)
 async def change_password(
-    data: auth_schema.ChangePasswordRequest,
-    current_user: User = Depends(get_current_active_user),
-    auth_service: AuthService = Depends(get_auth_service)
-) -> Any:
-    """Change password while logged in."""
-    # Auth service needs current_user (entity) and password strings
-    # We use UserService for changing password as per our new design
-    # Actually, AuthService has change_password in the original plan? 
-    # Plan said: `change_password()` in AuthService and UserService.
-    # In my implementation, UserService handles it. Let's use AuthService for consistency in auth.py
-    # but AuthService doesn't have change_password implemented in the plan?
-    # Wait, I implemented UserService.change_password.
-    
-    # I'll add change_password to AuthService too or just use UserService here.
-    # Let's check AuthService implementation I just did.
-    # It has request_email_change, logout, etc.
-    # Actually, UserService.change_password is already there. Let's use it.
-    from app.api.container_dependencies import get_user_service
-    from app.application.users.service import UserService
-    pass
-    
-@router.post("/change-password", response_model=auth_schema.MessageResponse)
-async def change_password_route(
     data: auth_schema.ChangePasswordRequest,
     current_user: User = Depends(get_current_active_user),
     user_service: UserService = Depends(get_user_service)

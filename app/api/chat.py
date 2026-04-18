@@ -40,7 +40,7 @@ async def list_sessions(
 
 @router.post(
     "/sessions",
-    # response_model=chat_schema.ChatSessionSummary, # Structure might differ slightly but usually matches
+    response_model=chat_schema.ChatSessionSummary,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new chat session",
 )
@@ -61,6 +61,7 @@ async def create_session(
     "/sessions/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a chat session",
+    responses={204: {"description": "Chat session deleted successfully"}},
 )
 
 async def delete_session(

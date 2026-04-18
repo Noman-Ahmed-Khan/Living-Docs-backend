@@ -77,7 +77,7 @@ async def get_project(
 
 @router.get(
     "/{project_id}/stats",
-    # response_model=project_schema.ProjectWithStats, # commented out as DTO structure might differ slightly from schema but usually matches
+    response_model=project_schema.ProjectWithStats,
     summary="Get project with statistics"
 )
 async def get_project_with_stats(
