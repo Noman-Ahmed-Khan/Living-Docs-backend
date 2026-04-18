@@ -18,6 +18,7 @@ class ChunkingStrategy(str, Enum):
     RECURSIVE = "recursive"
     SEMANTIC = "semantic"
     SENTENCE = "sentence"
+    LAYOUT_AWARE = "layout_aware"
 
 
 class RetrievalStrategy(str, Enum):
@@ -158,7 +159,8 @@ class Settings(BaseSettings):
     # HUGGINGFACE (LLM & EMBEDDINGS)
 
     HUGGINGFACE_API_KEY: Optional[str] = None
-    HUGGINGFACE_LLM_MODEL: str = "bigscience/bloom-560m"
+    HUGGINGFACE_LLM_MODEL: str = "HuggingFaceH4/zephyr-7b-beta"
+    HUGGINGFACE_LLM_PROVIDER: Optional[str] = None
     HUGGINGFACE_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     # PINECONE VECTOR DATABASE SETTINGS

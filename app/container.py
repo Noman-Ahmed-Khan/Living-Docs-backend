@@ -16,7 +16,8 @@ from app.application.documents.ingestion_service import IngestionService
 from app.application.query.query_service import QueryService
 
 # RAG Infrastructure
-from app.infrastructure.rag.chunkers.langchain_chunker import LangChainChunker
+# from app.infrastructure.rag.chunkers.langchain_chunker import LangChainChunker
+from app.infrastructure.rag.chunkers.unstructured_chunker import UnstructuredLayoutChunker
 from app.infrastructure.rag.embeddings.huggingface_embedder import HuggingFaceEmbedder
 from app.infrastructure.rag.vectorstores.pinecone_store import PineconeVectorStore
 from app.infrastructure.rag.retrievers.document_retriever import create_retriever
@@ -59,10 +60,10 @@ class Container:
         self._file_storage = LocalFileStore(settings.UPLOAD_DIR)
 
         # RAG infrastructure
-        self._chunker = LangChainChunker(
-            chunk_size=settings.RAG_CONFIG.chunker_config.chunk_size,
-            chunk_overlap=settings.RAG_CONFIG.chunker_config.chunk_overlap,
-            min_chunk_size=settings.RAG_CONFIG.chunker_config.min_chunk_size,
+        self._chunker = UnstructuredLayoutChunker(
+            min_parent_length=60,
+            min_sentence_length=20,
+            max_parent_elements=5,
         )
         self._embedder: Optional[HuggingFaceEmbedder] = None
         self._vector_store: Optional[PineconeVectorStore] = None
@@ -109,6 +110,7 @@ class Container:
             self._llm_client = HuggingFaceLLMClient(
                 model_name=settings.HUGGINGFACE_LLM_MODEL,
                 api_key=settings.HUGGINGFACE_API_KEY,
+                provider=settings.HUGGINGFACE_LLM_PROVIDER,
                 temperature=settings.RAG_CONFIG.query_config.temperature,
                 max_tokens=settings.RAG_CONFIG.query_config.max_tokens,
             )
