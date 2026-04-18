@@ -1,7 +1,7 @@
-"""Document retriever with multiple strategies."""
+"""Document retriever with parent-context resolution."""
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import UUID
 from abc import ABC, abstractmethod
 
@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class BaseRetriever(IRetriever):
-    """Abstract base retriever."""
-    
+    """Abstract base retriever with parent-context resolution."""
+
     def __init__(
         self,
         embedder: IEmbedder,
@@ -25,7 +25,7 @@ class BaseRetriever(IRetriever):
     ):
         """
         Initialize retriever.
-        
+
         Args:
             embedder: Text embedding service
             vector_store: Vector database
@@ -35,12 +35,12 @@ class BaseRetriever(IRetriever):
         self._vector_store = vector_store
         self._config = config
         self._strategy = self._get_strategy()
-    
+
     @abstractmethod
     def _get_strategy(self) -> RetrievalStrategy:
         """Get the retrieval strategy."""
         pass
-    
+
     async def retrieve(
         self,
         query: str,
@@ -51,13 +51,62 @@ class BaseRetriever(IRetriever):
         """Retrieve relevant chunks (implemented by subclasses)."""
         pass
 
+    async def _resolve_parent_context(
+        self,
+        chunks: List[RetrievedChunk],
+        namespace: str,
+    ) -> List[RetrievedChunk]:
+        """Resolve parent text for retrieved child chunks.
+
+        For each child chunk that has a parent_id, fetches the parent
+        chunk from the vector store and attaches its text as
+        `parent_text` on the child.  This allows the LLM to receive
+        paragraph-level context while retrieval operates on sentence-level.
+        """
+        # Collect unique parent IDs
+        parent_ids: Dict[str, None] = {}
+        for chunk in chunks:
+            pid = chunk.parent_id
+            if pid and chunk.chunk_type == "child":
+                parent_ids[pid] = None
+
+        if not parent_ids:
+            return chunks
+
+        # Fetch parent chunks in one batch call
+        try:
+            parent_chunks = await self._vector_store.fetch_by_ids(
+                ids=list(parent_ids.keys()),
+                namespace=namespace,
+            )
+            parent_map = {
+                pc.chunk_id: (pc.text, pc.bbox)
+                for pc in parent_chunks
+            }
+            logger.debug(
+                f"Resolved {len(parent_map)}/{len(parent_ids)} parent chunks"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to resolve parent context: {e}")
+            # Graceful degradation: return chunks without parent text
+            return chunks
+
+        # Attach parent text to children
+        for chunk in chunks:
+            if chunk.parent_id and chunk.parent_id in parent_map:
+                parent_text, parent_bbox = parent_map[chunk.parent_id]
+                chunk.parent_text = parent_text
+                chunk.parent_bbox = parent_bbox
+
+        return chunks
+
 
 class SimilarityRetriever(BaseRetriever):
-    """Similarity search retriever."""
-    
+    """Similarity search retriever with parent-context resolution."""
+
     def _get_strategy(self) -> RetrievalStrategy:
         return RetrievalStrategy.SIMILARITY
-    
+
     async def retrieve(
         self,
         query: str,
@@ -69,22 +118,22 @@ class SimilarityRetriever(BaseRetriever):
         try:
             # Generate query embedding
             query_embedding = await self._embedder.embed_text(query)
-            
+
             # Build filter if document_ids specified
-            filter_dict = None
+            filter_dict = {}
             if document_ids:
-                filter_dict = {
-                    "document_id": {"$in": [str(doc_id) for doc_id in document_ids]}
+                filter_dict["document_id"] = {
+                    "$in": [str(doc_id) for doc_id in document_ids]
                 }
-            
-            # Search vector store
+
+            # Search vector store (automatically filters to child chunks)
             results = await self._vector_store.search(
                 query_embedding=query_embedding,
                 namespace=namespace,
                 top_k=top_k,
-                filter_dict=filter_dict
+                filter_dict=filter_dict if filter_dict else None
             )
-            
+
             if not results:
                 logger.warning(
                     f"No results found for query in namespace {namespace} "
@@ -94,14 +143,17 @@ class SimilarityRetriever(BaseRetriever):
                     "No relevant documents found for your query",
                     details={"namespace": namespace, "query": query[:100]}
                 )
-            
+
+            # Resolve parent context
+            results = await self._resolve_parent_context(results, namespace)
+
             logger.info(
                 f"Retrieved {len(results)} chunks using similarity search "
                 f"(namespace={namespace}, top_k={top_k})"
             )
-            
+
             return results
-            
+
         except NoContextFoundError:
             raise
         except Exception as e:
@@ -114,10 +166,10 @@ class SimilarityRetriever(BaseRetriever):
 
 class MMRRetriever(BaseRetriever):
     """Maximal Marginal Relevance retriever for diverse results."""
-    
+
     def _get_strategy(self) -> RetrievalStrategy:
         return RetrievalStrategy.MMR
-    
+
     async def retrieve(
         self,
         query: str,
@@ -127,31 +179,31 @@ class MMRRetriever(BaseRetriever):
     ) -> List[RetrievedChunk]:
         """
         Retrieve chunks using MMR strategy.
-        
+
         MMR optimizes for both relevance and diversity.
         """
         try:
             # Generate query embedding
             query_embedding = await self._embedder.embed_text(query)
-            
+
             # For MMR, fetch more initial results then filter for diversity
             fetch_k = max(self._config.fetch_k, top_k * 3)
-            
+
             # Build filter if document_ids specified
-            filter_dict = None
+            filter_dict = {}
             if document_ids:
-                filter_dict = {
-                    "document_id": {"$in": [str(doc_id) for doc_id in document_ids]}
+                filter_dict["document_id"] = {
+                    "$in": [str(doc_id) for doc_id in document_ids]
                 }
-            
-            # Get initial results
+
+            # Get initial results (automatically filters to child chunks)
             results = await self._vector_store.search(
                 query_embedding=query_embedding,
                 namespace=namespace,
                 top_k=fetch_k,
-                filter_dict=filter_dict
+                filter_dict=filter_dict if filter_dict else None
             )
-            
+
             if not results:
                 logger.warning(
                     f"No results found for query in namespace {namespace} "
@@ -161,13 +213,13 @@ class MMRRetriever(BaseRetriever):
                     "No relevant documents found for your query",
                     details={"namespace": namespace, "query": query[:100]}
                 )
-            
+
             # Apply MMR-like diversity filtering
             # Select results that maximize: relevance - lambda_mult * similarity_to_selected
             selected = []
             remaining = list(results)
             lambda_mult = self._config.lambda_mult
-            
+
             while remaining and len(selected) < top_k:
                 if not selected:
                     # First result is most relevant
@@ -176,35 +228,41 @@ class MMRRetriever(BaseRetriever):
                     # Find next result that balances relevance and diversity
                     best_idx = 0
                     best_score = float('-inf')
-                    
+
                     for i, chunk in enumerate(remaining):
                         # Relevance score
                         relevance = chunk.score
-                        
+
                         # Diversity: minimum similarity to any selected chunk
                         diversity_penalty = 0
-                        selected_texts = [s.text for s in selected]
                         for selected_chunk in selected:
                             # Approximate diversity via text overlap (simple heuristic)
                             overlap = len(set(chunk.text.split()) & set(selected_chunk.text.split()))
-                            diversity_penalty = max(diversity_penalty, overlap / len(selected_chunk.text.split()))
-                        
+                            if selected_chunk.text.split():
+                                diversity_penalty = max(
+                                    diversity_penalty,
+                                    overlap / len(selected_chunk.text.split())
+                                )
+
                         # MMR score
                         score = relevance - lambda_mult * diversity_penalty
-                        
+
                         if score > best_score:
                             best_score = score
                             best_idx = i
-                    
+
                     selected.append(remaining.pop(best_idx))
-            
+
+            # Resolve parent context for selected chunks
+            selected = await self._resolve_parent_context(selected, namespace)
+
             logger.info(
                 f"Retrieved {len(selected)} chunks using MMR strategy "
                 f"(namespace={namespace}, top_k={top_k}, lambda={lambda_mult})"
             )
-            
+
             return selected
-            
+
         except NoContextFoundError:
             raise
         except Exception as e:
