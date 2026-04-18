@@ -18,6 +18,7 @@ class UserModel(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
 
     # Account Status
     is_active = Column(Boolean, default=True, nullable=False)

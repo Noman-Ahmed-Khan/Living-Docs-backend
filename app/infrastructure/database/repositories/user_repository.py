@@ -247,6 +247,8 @@ class SQLUserRepository(IUserRepository):
     @staticmethod
     def _to_entity(model: UserModel) -> User:
         """Convert ORM model → domain entity."""
+        # The current user table only stores the superuser flag, so derive
+        # the domain role from that persisted value.
         role = UserRole.SUPERUSER if model.is_superuser else UserRole.USER
         return User(
             id=model.id,
@@ -256,7 +258,7 @@ class SQLUserRepository(IUserRepository):
             is_active=model.is_active,
             is_verified=model.is_verified,
             is_superuser=model.is_superuser,
-            role=UserRole(model.role.value) if model.role else UserRole.USER,
+            role=role,
             failed_login_attempts=model.failed_login_attempts,
             locked_until=model.locked_until,
             password_changed_at=model.password_changed_at,
@@ -276,8 +278,8 @@ class SQLUserRepository(IUserRepository):
             full_name=entity.full_name,
             is_active=entity.is_active,
             is_verified=entity.is_verified,
-            is_superuser=entity.is_superuser,
-            role=UserRoleModel(entity.role.value),
+            is_superuser=entity.is_superuser
+            or entity.role == UserRole.SUPERUSER,
             failed_login_attempts=entity.failed_login_attempts,
             locked_until=entity.locked_until,
             password_changed_at=entity.password_changed_at,
@@ -294,8 +296,7 @@ class SQLUserRepository(IUserRepository):
         model.full_name = entity.full_name
         model.is_active = entity.is_active
         model.is_verified = entity.is_verified
-        model.is_superuser = entity.is_superuser
-        model.role = UserRoleModel(entity.role.value)
+        model.is_superuser = entity.is_superuser or entity.role == UserRole.SUPERUSER
         model.failed_login_attempts = entity.failed_login_attempts
         model.locked_until = entity.locked_until
         model.password_changed_at = entity.password_changed_at
