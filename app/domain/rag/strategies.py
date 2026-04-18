@@ -16,3 +16,4 @@ class ChunkingStrategy(str, Enum):
     CHARACTER = "character"         # Fixed character count
     SEMANTIC = "semantic"           # Semantic boundary detection (future)
     TOKEN = "token"                 # Token count based (future)
+    LAYOUT_AWARE = "layout_aware"   # Layout-aware parsing with Unstructured

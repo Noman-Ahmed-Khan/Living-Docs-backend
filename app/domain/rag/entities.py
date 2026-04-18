@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 
 from app.domain.common.entity import Entity
-from .value_objects import ChunkMetadata, EmbeddingVector
+from .value_objects import ChunkMetadata, EmbeddingVector, BoundingBox
 
 
 @dataclass
@@ -41,6 +41,8 @@ class Citation:
     char_start: Optional[int] = None
     char_end: Optional[int] = None
     relevance_score: Optional[float] = None
+    bbox: Optional[Dict[str, float]] = None  # {x0, y0, x1, y1} for API
+    parent_id: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API response."""
@@ -52,7 +54,9 @@ class Citation:
             "page": self.page,
             "char_start": self.char_start,
             "char_end": self.char_end,
-            "relevance_score": self.relevance_score
+            "relevance_score": self.relevance_score,
+            "bbox": self.bbox,
+            "parent_id": self.parent_id,
         }
 
 
@@ -79,7 +83,10 @@ class QueryResult(Entity):
 
 @dataclass
 class RetrievedChunk:
-    """A chunk retrieved from vector store."""
+    """A chunk retrieved from vector store.
+    
+    Extended to support parent-child hierarchy and bounding box coordinates.
+    """
     
     # This doesn't inherit from Entity, so required fields are OK
     chunk_id: str
@@ -88,13 +95,59 @@ class RetrievedChunk:
     metadata: ChunkMetadata
     score: float
     embedding: Optional[EmbeddingVector] = None
+    # Parent-child hierarchy fields
+    parent_id: Optional[str] = None
+    chunk_type: str = "child"
+    bbox: Optional[BoundingBox] = None
+    parent_bbox: Optional[BoundingBox] = None
+    parent_text: Optional[str] = None  # Resolved parent context
     
     def to_context_string(self) -> str:
-        """Format chunk for LLM context."""
-        header = f"[ID: {self.chunk_id}]"
+        """Format chunk for LLM context.
+        
+        If parent_text is available, use it for richer context.
+        Otherwise fall back to the child chunk text.
+        """
+        context_text = self.parent_text if self.parent_text else self.text
+        header = f"[{self.chunk_id}]"
         if self.metadata.source_file:
             header += f" (Source: {self.metadata.source_file}"
             if self.metadata.page:
                 header += f", Page: {self.metadata.page}"
             header += ")"
-        return f"{header}\n{self.text}"
+        return f"{header}\n{context_text}"
+
+
+@dataclass
+class ParentChunk:
+    """A parent chunk representing a paragraph or section.
+    
+    Used during ingestion to group child chunks and provide
+    LLM context during retrieval.
+    """
+    id: str
+    text: str
+    document_id: UUID
+    page: Optional[int] = None
+    bbox: Optional[BoundingBox] = None
+    chunk_index: int = 0
+    source_file: str = ""
+
+
+@dataclass
+class ChildChunk:
+    """A child chunk representing a single sentence.
+    
+    Used for embedding and similarity search. Links back to
+    its parent for context resolution.
+    """
+    id: str
+    text: str
+    document_id: UUID
+    parent_id: str
+    page: Optional[int] = None
+    bbox: Optional[BoundingBox] = None
+    chunk_index: int = 0
+    source_file: str = ""
+    char_start: int = 0
+    char_end: int = 0

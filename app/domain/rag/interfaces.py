@@ -133,6 +133,26 @@ class IVectorStore(ABC):
         pass
 
     @abstractmethod
+    async def fetch_by_ids(
+        self,
+        ids: List[str],
+        namespace: str
+    ) -> List[RetrievedChunk]:
+        """
+        Fetch specific chunks by their IDs.
+
+        Used to resolve parent chunks by parent_id during retrieval.
+
+        Args:
+            ids: List of chunk/vector IDs to fetch
+            namespace: Project namespace
+
+        Returns:
+            List of retrieved chunks (without relevance scores)
+        """
+        pass
+
+    @abstractmethod
     async def delete_namespace(self, namespace: str) -> None:
         """
         Delete all vectors in a namespace (project deletion).
