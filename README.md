@@ -77,14 +77,6 @@ Once the server is running, visit:
 - **ReDoc**: `http://localhost:8000/redoc` (clean reference)
 - **OpenAPI JSON**: `http://localhost:8000/api/v1/openapi.json` (machine-readable)
 
-### Documentation Files
-
-- **[documentation/API_DOCUMENTATION.md](documentation/API_DOCUMENTATION.md)** - Comprehensive API reference with examples
-- **[documentation/API_QUICK_REFERENCE.md](documentation/API_QUICK_REFERENCE.md)** - Quick lookup table for all endpoints
-- **[documentation/SWAGGER_GUIDE.md](documentation/SWAGGER_GUIDE.md)** - Guide to using interactive Swagger
-- **[documentation/ARCHITECTURE.md](documentation/ARCHITECTURE.md)** - System architecture and design patterns
-- **[documentation/FILE_PROCESSING_AND_QUERY_WORKFLOW.md](documentation/FILE_PROCESSING_AND_QUERY_WORKFLOW.md)** - RAG pipeline walkthrough
-
 ## Project Structure
 
 ```
