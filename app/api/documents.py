@@ -1,5 +1,3 @@
-import os
-import uuid
 import logging
 from typing import List, Optional
 from pathlib import Path
@@ -15,6 +13,7 @@ from fastapi import (
     Query,
     status
 )
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -319,6 +318,65 @@ async def get_document(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get document"
+        )
+
+
+@router.get(
+    "/{document_id}/download",
+    response_class=FileResponse,
+    summary="Download document file",
+    responses={
+        200: {"description": "Document file downloaded successfully"},
+        404: {"description": "Document not found, file missing, or access denied"},
+        500: {"description": "Failed to download document"},
+    },
+)
+async def download_document(
+    document_id: UUID,
+    current_user: User = Depends(get_current_verified_user),
+    project_service: ProjectService = Depends(get_project_service),
+    document_service: DocumentService = Depends(get_document_service)
+):
+    """Download the original file for a document."""
+    try:
+        try:
+            document = await document_service.get_document_by_id(document_id=document_id)
+        except DocumentNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+
+        try:
+            await project_service.get_project(
+                project_id=document.project_id,
+                owner_id=current_user.id
+            )
+        except ProjectNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+
+        file_path = Path(document.file_path)
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document file not found"
+            )
+
+        return FileResponse(
+            path=str(file_path),
+            filename=document.original_filename,
+            media_type=document.content_type or "application/octet-stream"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download document: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to download document"
         )
 
 

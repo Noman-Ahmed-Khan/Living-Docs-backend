@@ -1,11 +1,12 @@
 """Chat application service."""
 
+import json
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from app.domain.chat.interfaces import IChatRepository
-from app.domain.chat.exceptions import ChatSessionNotFoundError
+from app.domain.chat.exceptions import ChatSessionNotFoundError, InvalidChatSessionUpdateError
 from app.domain.chat.entities import MessageRole
 from app.domain.projects.interfaces import IProjectRepository
 from app.domain.projects.exceptions import ProjectNotFoundError
@@ -73,6 +74,42 @@ class ChatService:
         await self._chat_repo.delete_session(session)
         logger.info(f"Chat session {session_id} deleted by user {user_id}")
 
+    async def update_session(
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        updates: Dict[str, Any],
+    ) -> ChatSessionDTO:
+        """Update a chat session title or active state."""
+        if not updates:
+            raise InvalidChatSessionUpdateError(
+                "At least one session field must be provided"
+            )
+
+        session = await self._chat_repo.get_session(session_id, user_id)
+        if not session:
+            raise ChatSessionNotFoundError(f"Chat session {session_id} not found")
+
+        if "title" in updates:
+            session.title = updates["title"]
+        if "is_active" in updates:
+            if updates["is_active"] is None:
+                raise InvalidChatSessionUpdateError(
+                    "is_active must be true or false"
+                )
+            session.is_active = updates["is_active"]
+
+        updated = await self._chat_repo.update_session(session)
+        if not updated:
+            raise ChatSessionNotFoundError(f"Chat session {session_id} not found")
+
+        logger.info(
+            "Chat session %s updated by user %s",
+            session_id,
+            user_id,
+        )
+        return self._session_to_dto(updated)
+
     async def get_messages(
         self,
         session_id: UUID,
@@ -104,10 +141,19 @@ class ChatService:
             created_at=session.created_at,
             updated_at=session.updated_at,
             last_message_at=session.last_message_at,
+            message_count=getattr(session, "message_count", 0),
         )
 
     @staticmethod
     def _message_to_dto(message) -> ChatMessageDTO:
+        citations = None
+        if message.answer_metadata:
+            try:
+                metadata = json.loads(message.answer_metadata)
+                citations = metadata.get("citations")
+            except (TypeError, ValueError):
+                citations = None
+
         return ChatMessageDTO(
             id=message.id,
             session_id=message.session_id,
@@ -116,4 +162,5 @@ class ChatService:
             created_at=message.created_at,
             query_id=message.query_id,
             answer_metadata=message.answer_metadata,
+            citations=citations,
         )

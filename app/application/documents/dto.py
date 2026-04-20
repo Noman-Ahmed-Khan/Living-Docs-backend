@@ -40,4 +40,5 @@ class DocumentDetailDTO:
     created_at: datetime
     updated_at: datetime
     processed_at: Optional[datetime]
+    content_type: Optional[str]
     file_path: str
