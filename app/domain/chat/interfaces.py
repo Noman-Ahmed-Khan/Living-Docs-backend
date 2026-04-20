@@ -39,6 +39,11 @@ class IChatRepository(ABC):
         pass
 
     @abstractmethod
+    async def update_session(self, session: ChatSession) -> Optional[ChatSession]:
+        """Update an existing chat session."""
+        pass
+
+    @abstractmethod
     async def delete_session(self, session: ChatSession) -> None:
         """Permanently delete a session and all its messages."""
         pass
@@ -64,4 +69,14 @@ class IChatRepository(ABC):
         limit: int = 200,
     ) -> List[ChatMessage]:
         """List messages for a session (ownership check via user_id)."""
+        pass
+
+    @abstractmethod
+    async def list_recent_messages(
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        limit: int = 20,
+    ) -> List[ChatMessage]:
+        """List the most recent messages for a session in chronological order."""
         pass

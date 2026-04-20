@@ -1,7 +1,7 @@
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class ChatSessionBase(BaseModel):
@@ -19,14 +19,43 @@ class ChatSessionBase(BaseModel):
 
 class ChatSessionCreate(ChatSessionBase):
     """Schema for creating a new chat session."""
-    
-    class Config:
-        json_schema_extra = {
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "project_id": "660e8400-e29b-41d4-a716-446655440000",
-                "title": "Research Discussion"
+                "title": "Research Discussion",
             }
         }
+    )
+
+
+class ChatSessionUpdate(BaseModel):
+    """Schema for updating a chat session."""
+    title: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Optional new title for the session"
+    )
+    is_active: Optional[bool] = Field(
+        None,
+        description="Whether the session should be active"
+    )
+
+    @model_validator(mode="after")
+    def validate_payload(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided")
+        return self
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "title": "Research Discussion",
+                "is_active": True
+            }
+        }
+    )
 
 
 class ChatSessionSummary(BaseModel):

@@ -50,6 +50,7 @@ from app.domain.chat.exceptions import (
     ChatError,
     ChatSessionNotFoundError,
     ChatAccessDeniedError,
+    InvalidChatSessionUpdateError,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ EXCEPTION_STATUS_MAP = {
     # Chat exceptions
     ChatSessionNotFoundError: status.HTTP_404_NOT_FOUND,
     ChatAccessDeniedError: status.HTTP_403_FORBIDDEN,
+    InvalidChatSessionUpdateError: status.HTTP_400_BAD_REQUEST,
     ChatError: status.HTTP_400_BAD_REQUEST,
 }
 

@@ -57,6 +57,25 @@ async def create_session(
     )
 
 
+@router.patch(
+    "/sessions/{session_id}",
+    response_model=chat_schema.ChatSessionSummary,
+    summary="Update a chat session",
+)
+async def update_session(
+    session_id: UUID,
+    session_in: chat_schema.ChatSessionUpdate,
+    chat_service: ChatService = Depends(get_chat_service),
+    current_user: User = Depends(get_current_active_user),
+) -> Any:
+    """Update a chat session title or active state."""
+    return await chat_service.update_session(
+        session_id=session_id,
+        user_id=current_user.id,
+        updates=session_in.model_dump(exclude_unset=True),
+    )
+
+
 @router.delete(
     "/sessions/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,

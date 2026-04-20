@@ -16,3 +16,8 @@ class ChatSessionNotFoundError(ChatError):
 class ChatAccessDeniedError(ChatError):
     """User does not have access to this chat session."""
     pass
+
+
+class InvalidChatSessionUpdateError(ChatError):
+    """Chat session update payload is empty or invalid."""
+    pass

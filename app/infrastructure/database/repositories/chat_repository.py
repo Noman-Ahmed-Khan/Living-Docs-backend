@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.domain.chat.entities import ChatSession, ChatMessage, MessageRole
@@ -41,7 +41,7 @@ class SQLChatRepository(IChatRepository):
         self._session.add(db_session)
         self._session.commit()
         self._session.refresh(db_session)
-        return self._session_to_entity(db_session)
+        return self._session_to_entity(db_session, message_count=0)
 
     async def get_session(
         self, session_id: UUID, user_id: UUID
@@ -66,9 +66,10 @@ class SQLChatRepository(IChatRepository):
         skip: int = 0,
         limit: int = 100,
     ) -> Tuple[List[ChatSession], int]:
-        """List user's sessions, optionally filtered by project."""
+        """List user's active sessions, optionally filtered by project."""
         query = self._session.query(ChatSessionModel).filter(
-            ChatSessionModel.user_id == user_id
+            ChatSessionModel.user_id == user_id,
+            ChatSessionModel.is_active.is_(True),
         )
         if project_id:
             query = query.filter(ChatSessionModel.project_id == project_id)
@@ -83,7 +84,31 @@ class SQLChatRepository(IChatRepository):
             .limit(limit)
             .all()
         )
-        return [self._session_to_entity(r) for r in rows], total
+        message_counts = self._message_counts_for_sessions([r.id for r in rows])
+        return [
+            self._session_to_entity(r, message_count=message_counts.get(r.id, 0))
+            for r in rows
+        ], total
+
+    async def update_session(self, session: ChatSession) -> Optional[ChatSession]:
+        """Update a chat session's metadata."""
+        db = (
+            self._session.query(ChatSessionModel)
+            .filter(ChatSessionModel.id == session.id)
+            .first()
+        )
+        if not db:
+            return None
+
+        db.title = session.title
+        db.is_active = session.is_active
+        self._session.add(db)
+        self._session.commit()
+        self._session.refresh(db)
+        return self._session_to_entity(
+            db,
+            message_count=await self.get_message_count(session.id),
+        )
 
     async def delete_session(self, session: ChatSession) -> None:
         """Permanently delete a session and all its messages."""
@@ -150,12 +175,51 @@ class SQLChatRepository(IChatRepository):
         )
         return [self._message_to_entity(r) for r in rows]
 
+    async def get_message_count(self, session_id: UUID) -> int:
+        """Count messages for a given session."""
+        count = (
+            self._session.query(func.count(ChatMessageModel.id))
+            .filter(ChatMessageModel.session_id == session_id)
+            .scalar()
+        )
+        return int(count or 0)
+
+    async def list_recent_messages(
+        self,
+        session_id: UUID,
+        user_id: UUID,
+        limit: int = 20,
+    ) -> List[ChatMessage]:
+        """List the most recent messages for a session in chronological order."""
+        if limit <= 0:
+            return []
+
+        db_session = await self.get_session(session_id, user_id)
+        if not db_session:
+            return []
+
+        rows = (
+            self._session.query(ChatMessageModel)
+            .filter(ChatMessageModel.session_id == session_id)
+            .order_by(
+                ChatMessageModel.created_at.desc(),
+                ChatMessageModel.id.desc(),
+            )
+            .limit(limit)
+            .all()
+        )
+        rows.reverse()
+        return [self._message_to_entity(r) for r in rows]
+
     # ------------------------------------------------------------------
     # Conversion helpers
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _session_to_entity(model: ChatSessionModel) -> ChatSession:
+    def _session_to_entity(
+        model: ChatSessionModel,
+        message_count: int = 0,
+    ) -> ChatSession:
         return ChatSession(
             id=model.id,
             project_id=model.project_id,
@@ -165,6 +229,7 @@ class SQLChatRepository(IChatRepository):
             last_message_at=model.last_message_at,
             created_at=model.created_at,
             updated_at=model.updated_at,
+            message_count=message_count,
         )
 
     @staticmethod
@@ -178,3 +243,19 @@ class SQLChatRepository(IChatRepository):
             answer_metadata=model.answer_metadata,
             created_at=model.created_at,
         )
+
+    def _message_counts_for_sessions(self, session_ids: List[UUID]) -> dict[UUID, int]:
+        """Return message counts for a list of session IDs."""
+        if not session_ids:
+            return {}
+
+        rows = (
+            self._session.query(
+                ChatMessageModel.session_id,
+                func.count(ChatMessageModel.id),
+            )
+            .filter(ChatMessageModel.session_id.in_(session_ids))
+            .group_by(ChatMessageModel.session_id)
+            .all()
+        )
+        return {session_id: int(count or 0) for session_id, count in rows}

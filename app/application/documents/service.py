@@ -102,20 +102,19 @@ class DocumentService:
         if not document:
             raise DocumentNotFoundError(f"Document {document_id} not found")
 
-        return DocumentDetailDTO(
-            id=document.id,
-            filename=document.filename,
-            original_filename=document.original_filename,
-            project_id=document.project_id,
-            status=document.status.value,
-            file_size=document.file_size,
-            chunk_count=document.chunk_count,
-            page_count=document.page_count,
-            created_at=document.created_at,
-            updated_at=document.updated_at,
-            processed_at=document.processed_at,
-            file_path=document.file_path
-        )
+        return self._to_detail_dto(document)
+
+    async def get_document_by_id(
+        self,
+        document_id: UUID
+    ) -> DocumentDetailDTO:
+        """Get document details without project scoping."""
+        document = await self._document_repo.get_by_id(document_id)
+
+        if not document:
+            raise DocumentNotFoundError(f"Document {document_id} not found")
+
+        return self._to_detail_dto(document)
 
     async def list_documents(
         self,
@@ -135,20 +134,7 @@ class DocumentService:
         )
 
         dto_list = [
-            DocumentDetailDTO(
-                id=doc.id,
-                filename=doc.filename,
-                original_filename=doc.original_filename,
-                project_id=doc.project_id,
-                status=doc.status.value,
-                file_size=doc.file_size,
-                chunk_count=doc.chunk_count,
-                page_count=doc.page_count,
-                created_at=doc.created_at,
-                updated_at=doc.updated_at,
-                processed_at=doc.processed_at,
-                file_path=doc.file_path
-            )
+            self._to_detail_dto(doc)
             for doc in documents
         ]
 
@@ -193,17 +179,23 @@ class DocumentService:
         document.reset_for_reingestion()
         saved = await self._document_repo.save(document)
 
+        return self._to_detail_dto(saved)
+
+    @staticmethod
+    def _to_detail_dto(document: Document) -> DocumentDetailDTO:
+        """Map a domain document into the detailed API DTO."""
         return DocumentDetailDTO(
-            id=saved.id,
-            filename=saved.filename,
-            original_filename=saved.original_filename,
-            project_id=saved.project_id,
-            status=saved.status.value,
-            file_size=saved.file_size,
-            chunk_count=saved.chunk_count,
-            page_count=saved.page_count,
-            created_at=saved.created_at,
-            updated_at=saved.updated_at,
-            processed_at=saved.processed_at,
-            file_path=saved.file_path
+            id=document.id,
+            filename=document.filename,
+            original_filename=document.original_filename,
+            project_id=document.project_id,
+            status=document.status.value,
+            file_size=document.file_size,
+            chunk_count=document.chunk_count,
+            page_count=document.page_count,
+            created_at=document.created_at,
+            updated_at=document.updated_at,
+            processed_at=document.processed_at,
+            content_type=document.content_type,
+            file_path=document.file_path
         )

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
-from typing import Optional, List
+from typing import Optional
 
 from app.domain.common.entity import Entity
 
@@ -63,6 +63,7 @@ class ChatSession(Entity):
     title: Optional[str] = None
     is_active: bool = True
     last_message_at: Optional[datetime] = None
+    message_count: int = 0
 
     @classmethod
     def create(
@@ -79,6 +80,7 @@ class ChatSession(Entity):
             title=title,
             is_active=True,
             created_at=datetime.now(timezone.utc),
+            message_count=0,
         )
 
     def deactivate(self) -> None:
