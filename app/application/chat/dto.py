@@ -1,6 +1,6 @@
 """Chat application DTOs."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
@@ -16,6 +16,7 @@ class ChatMessageDTO:
     created_at: Optional[datetime] = None
     query_id: Optional[UUID] = None
     answer_metadata: Optional[str] = None
+    citations: Optional[List[dict]] = None
 
 
 @dataclass
@@ -29,3 +30,4 @@ class ChatSessionDTO:
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     last_message_at: Optional[datetime] = None
+    message_count: int = 0

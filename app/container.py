@@ -138,7 +138,7 @@ class Container:
 
     # RAG query service
 
-    def query_service(self) -> QueryService:
+    def query_service(self, db: Session) -> QueryService:
         retriever_config = RetrieverConfig(
             top_k=settings.RAG_CONFIG.retriever_config.top_k,
             score_threshold=settings.RAG_CONFIG.retriever_config.score_threshold,
@@ -162,6 +162,7 @@ class Container:
             llm_client=self.llm_client(),
             retriever_config=retriever_config,
             query_config=query_config,
+            chat_repo=self.chat_repository(db),
         )
 
     # User / auth repositories & services

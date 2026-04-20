@@ -59,9 +59,10 @@ def get_ingestion_service(
 
 
 def get_query_service(
+    db: Session = Depends(get_db),
     container: Container = Depends(get_container),
 ) -> QueryService:
-    return container.query_service()
+    return container.query_service(db)
 
 
 def get_vector_store(
