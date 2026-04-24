@@ -1,41 +1,99 @@
 # Living Docs Backend
 
-A production-ready AI documentation system with explainable RAG and precise citations.
+A production-ready AI documentation backend with explainable RAG, precise citations, and a clean architecture.
+
+![Architecture Diagram](documentation/architecture-diagram.jpg)
 
 ## Purpose
 
-**Living Docs** is an AI-powered document intelligence system with **RAG (Retrieval-Augmented Generation)** capabilities. It enables users to:
-- Upload documents in 7 formats (PDF, DOCX, PPTX, XLSX, MD, TXT, HTML)
-- Process documents through a sophisticated chunking & embedding pipeline
-- Query documents using natural language with precise character-level citations
-- Maintain multi-turn conversations with document context
+**Living Docs** is a document intelligence backend built to support:
+- Secure multi-tenant projects with user-owned document libraries
+- Document ingestion across multiple formats
+- Retrieval-augmented query and chat over uploaded content
+- Explicit source citations tied to chunk metadata and bounding boxes
+- Persistent chat sessions with conversation-aware retrieval
 
-## Architecture
+## Architecture & Design
 
-The project follows **Domain-Driven Design (DDD)** with **Clean Architecture** principles:
+This repository is organized as a Clean Architecture / Domain-Driven Design system.
 
 ```
-Presentation (API) → Application (Services) → Domain (Business Logic) ← Infrastructure (External I/O)
+Presentation (FastAPI) → Application (Orchestration) → Domain (Entities + Interfaces)
+                 ↑                                      ↓
+           Infrastructure (DB, storage, RAG, auth, email)
 ```
+
+### Layer mapping
+
+- `app/api/` — HTTP layer, request validation, route definitions, middleware
+- `app/application/` — business process orchestration and use-case services
+- `app/domain/` — core entities, exceptions, interfaces, value objects, business rules
+- `app/infrastructure/` — concrete implementations for database, file storage, RAG, security, email, and tasks
+- `app/container.py` — composition root; the only place concrete implementations are wired to interfaces
+
+### Key design principles
+
+- Dependency inversion: services depend on interfaces, not concrete implementations
+- Lazy initialization for RAG components: embeddings, vector store, and LLM are created only when needed
+- Parent/child chunk hierarchy: parent chunks provide paragraph-level context while child chunks drive similarity search
+- Project namespace isolation: Pinecone namespaces use the project ID, so each project is separated in the vector store
+- Chat-aware retrieval: query service can include recent session history to resolve follow-up questions
+
+## RAG Pipeline Overview
+
+The RAG pipeline is implemented in code across the following areas:
+
+- `app/application/documents/ingestion_service.py` — orchestrates upload ingestion
+- `app/infrastructure/rag/chunkers/unstructured_chunker.py` — converts file text into parent/child chunks
+- `app/infrastructure/rag/embeddings/huggingface_embedder.py` — generates embeddings with Hugging Face
+- `app/infrastructure/rag/vectorstores/pinecone_store.py` — stores and searches vectors in Pinecone
+- `app/application/query/query_service.py` — orchestrates retrieval, prompt construction, LLM generation, and citations
+- `app/infrastructure/rag/retrievers/document_retriever.py` — retrieves child chunks and resolves parent context
+
+### Document ingestion flow (code-level)
+
+1. User uploads a document via `app/api/documents.py`.
+2. `DocumentService` validates and persists document metadata.
+3. `IngestionService.ingest_document()` reads the file from `LocalFileStore`.
+4. `UnstructuredLayoutChunker` splits the document into a mixed list of parent and child `Chunk` entities.
+   - Child chunks are suitable for semantic search.
+   - Parent chunks are kept so the query pipeline can resolve broader paragraph context.
+5. `HuggingFaceEmbedder.embed_batch()` converts every chunk text into embedding vectors.
+6. `PineconeVectorStore.add_chunks()` stores all vectors with metadata keys like `document_id`, `chunk_id`, `page`, `chunk_type`, and bounding box fields.
+7. Document status is updated via the document repository.
+
+### Query / retrieval flow (code-level)
+
+1. The query endpoint in `app/api/query.py` receives a natural language question.
+2. `QueryService.query()` validates the request and optionally loads recent session history from `ChatRepository`.
+3. The text query is transformed into an embedding by `HuggingFaceEmbedder.embed_text()`.
+4. `DocumentRetriever.retrieve()` searches Pinecone for the top child chunks.
+   - The default search strategy is similarity search.
+   - The system can also use MMR for diversity if configured.
+5. `BaseRetriever._resolve_parent_context()` fetches parent chunks by ID for any retrieved child chunk that includes `parent_id`.
+6. `QueryService._format_context()` combines child text and parent context into a prompt section.
+7. `HuggingFaceLLMClient.generate()` sends the assembled prompt to the LLM.
+8. `QueryService._build_citations()` parses the model output, extracts chunk references, and attaches metadata such as file, page, and character offset.
+9. The final `QueryResult` includes the generated answer, citation list, document sources, and diagnostics metadata.
 
 ## Features
 
-- **Multi-tenant architecture** - User → Projects → Documents → Chat Sessions
-- **JWT-based authentication** with refresh token rotation and account lockout
-- **Document ingestion** for 7 file formats with intelligent chunking
-- **Character-level citation tracking** with source metadata (file, page, offset)
-- **RAG pipeline** using LangChain, Hugging Face embeddings, and Pinecone
-- **Multi-turn conversations** with persistent chat history and context awareness
-- **RESTful API** with OpenAPI/Swagger documentation
-- **Comprehensive error handling** with standardized responses
-- **Unit testing** with pytest, with E2E coverage planned
+- Secure JWT authentication with refresh token rotation
+- Multi-project, multi-document workspace model
+- File upload support for PDF, DOCX, PPTX, XLSX, MD, TXT, HTML
+- Document ingestion with parent/child chunk structure
+- Hugging Face embeddings and LLM for RAG
+- Pinecone vector store with namespace and parent-child support
+- Persistent chat sessions and message history
+- Source-backed responses with citation metadata
+- Clean error handling and API-standard response models
 
 ## Prerequisites
 
 - Python 3.11+
 - PostgreSQL database
 - Hugging Face API Key
-- Pinecone API Key and Index (384 dimensions for Hugging Face embeddings)
+- Pinecone API Key and Index
 
 ## Quick Start
 
@@ -61,7 +119,6 @@ SECRET_KEY=your_secret_key_for_jwt_tokens
 
 ### 3. Database Setup
 ```bash
-# Run migrations
 alembic upgrade head
 ```
 
@@ -73,141 +130,108 @@ uvicorn app.main:app --reload
 ## API Documentation
 
 Once the server is running, visit:
-- **Swagger UI**: `http://localhost:8000/docs` (interactive testing)
-- **ReDoc**: `http://localhost:8000/redoc` (clean reference)
-- **OpenAPI JSON**: `http://localhost:8000/api/v1/openapi.json` (machine-readable)
+- **Swagger UI**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
+- **OpenAPI JSON**: `http://localhost:8000/api/v1/openapi.json`
 
 ### Documentation Files
 
-- **[documentation/API_DOCUMENTATION.md](documentation/API_DOCUMENTATION.md)** - Comprehensive API reference with examples
-- **[documentation/API_QUICK_REFERENCE.md](documentation/API_QUICK_REFERENCE.md)** - Quick lookup table for all endpoints
-- **[documentation/SWAGGER_GUIDE.md](documentation/SWAGGER_GUIDE.md)** - Guide to using interactive Swagger
-- **[documentation/ARCHITECTURE.md](documentation/ARCHITECTURE.md)** - System architecture and design patterns
-- **[documentation/FILE_PROCESSING_AND_QUERY_WORKFLOW.md](documentation/FILE_PROCESSING_AND_QUERY_WORKFLOW.md)** - RAG pipeline walkthrough
+- **[documentation/API_DOCUMENTATION.md](documentation/API_DOCUMENTATION.md)**
+- **[documentation/API_QUICK_REFERENCE.md](documentation/API_QUICK_REFERENCE.md)**
+- **[documentation/SWAGGER_GUIDE.md](documentation/SWAGGER_GUIDE.md)**
+- **[documentation/ARCHITECTURE.md](documentation/ARCHITECTURE.md)**
+- **[documentation/FILE_PROCESSING_AND_QUERY_WORKFLOW.md](documentation/FILE_PROCESSING_AND_QUERY_WORKFLOW.md)**
 
 ## Project Structure
 
 ```
 backend/
-├── alembic/                          # Database migrations
+├── alembic/
 ├── app/
-│   ├── api/                          # Presentation Layer (REST endpoints)
-│   │   ├── auth.py, users.py, projects.py, documents.py, query.py, chat.py
-│   │   ├── schemas/                  # Pydantic models for validation
-│   │   └── middleware/               # Error handling & middleware
-│   ├── application/                  # Application Layer (Use case orchestration)
-│   │   ├── auth/, users/, projects/, documents/, query/, chat/
-│   │   └── service.py & dto.py in each module
-│   ├── domain/                       # Domain Layer (Business logic)
-│   │   ├── chat/, documents/, projects/, users/, rag/
-│   │   ├── entities.py, interfaces.py, exceptions.py
-│   ├── infrastructure/               # Infrastructure Layer (External I/O)
-│   │   ├── database/                 # PostgreSQL + SQLAlchemy
-│   │   ├── storage/                  # File storage
-│   │   ├── rag/                      # LangChain, embeddings, vectorstore
-│   │   ├── security/                 # JWT, password hashing
-│   │   ├── email/                    # Email services
-│   │   └── tasks/                    # Background task processing
-│   ├── config/                       # Configuration & constants
-│   └── templates/                    # Email templates
+│   ├── api/
+│   ├── application/
+│   ├── config/
+│   ├── domain/
+│   └── infrastructure/
 ├── tests/
-│   ├── unit/                         # Unit tests
-│   └── e2e/                          # End-to-end tests
-├── scripts/                          # Utility scripts
-├── documentation/                    # API & architecture docs
+├── scripts/
+├── documentation/
 └── requirements.txt
 ```
 
-> Note: the current test suite is `tests/unit/`; end-to-end coverage is still planned.
-
 ## Data Model
 
-The system uses the following core entities:
+- **User**: owns projects and controls access
+- **Project**: namespace for related documents and chat
+- **Document**: uploaded file metadata, status, and chunk counts
+- **ChatSession**: conversation state linked to a project
+- **ChatMessage**: individual user/assistant messages
 
-- **User**: Authentication credentials, profile, security settings
-- **Project**: Container for documents & conversations (single owner)
-- **Document**: Uploaded files with processing status and metadata
-- **ChatSession**: Multi-turn conversation within a project context
-- **ChatMessage**: Individual messages with role (user/assistant/system)
+## RAG Pipeline Summary
 
-Entity relationships:
-```
-User → owns many → Projects
-Project → contains many → Documents
-Project → contains many → ChatSessions → contains many → ChatMessages
-```
+### Ingestion
+- Document file is saved to local storage
+- Chunker splits text into structured chunks
+- Embedder converts text to vectors
+- Vector store upserts vectors into Pinecone
+- Document status is updated
 
-## Data Flows
-
-### Document Ingestion Pipeline
-1. **Upload**: File saved to `uploads/{project_id}/`
-2. **Parse**: LangChain loads document based on format
-3. **Chunk**: RecursiveCharacterTextSplitter (1000 char chunks, 200 overlap)
-4. **Embed**: HuggingFace embeddings (384-768 dimensions)
-5. **Store**: Chunks indexed in Pinecone with project namespace
-6. **Track**: Document status updated to COMPLETED
-
-### Query & Citation Flow
-1. **Retrieve**: Query embedded and searched against Pinecone
-2. **Context**: Prior chat messages included for multi-turn understanding
-3. **Generate**: LLM builds context and generates answer
-4. **Cite**: Auto-extract chunk IDs from answer with metadata
-5. **Store**: Save Q&A to chat history for context tracking
-6. **Return**: Answer with citations, source metadata, and tracking info
+### Query
+- Query is embedded
+- Relevant chunks are retrieved from Pinecone
+- Parent chunk context is resolved
+- Prompt is built with document and chat context
+- LLM generates an answer
+- Citations are extracted and returned
 
 ## Core Technology Stack
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **API** | FastAPI | REST endpoints with automatic OpenAPI spec |
-| **Database** | PostgreSQL + SQLAlchemy | Persistent data storage & ORM |
-| **Migrations** | Alembic | Schema versioning |
-| **Vector DB** | Pinecone | Semantic search at scale |
-| **Embeddings** | HuggingFace | Text-to-vector conversion |
-| **LLM** | HuggingFace | Answer generation |
-| **Text Processing** | LangChain | Document loading & chunking |
-| **Authentication** | python-jose + bcrypt | JWT + password security |
-| **Email** | aiosmtplib | Async email verification |
-| **Testing** | pytest | Unit test framework |
+| API | FastAPI | REST interface |
+| Database | PostgreSQL + SQLAlchemy | Persistence |
+| Vector DB | Pinecone | Semantic search |
+| Embeddings | Hugging Face | Vector encoding |
+| LLM | Hugging Face | Response generation |
+| Chunking | LangChain / Unstructured | Document splitting |
+| Auth | JWT + bcrypt | Security |
+| Testing | pytest | Unit tests |
 
-## TODO / Next Steps
+## Next Improvements
 
-The core API, RAG flow, and document lifecycle are in place. The main gaps I would prioritize next are:
-
-- Add Redis + Celery to move document ingestion and re-ingestion out of FastAPI `BackgroundTasks` into durable jobs with retries and progress tracking.
-- Add a dedicated `redis` service and worker service in `docker-compose.yml` so background processing can run independently of the API process.
-- Add Redis-backed caching and rate limiting for hot paths like auth, project lookups, and repeated queries.
-- Add S3/MinIO-style object storage instead of local-only `uploads/` to make file storage production-safe.
-- Add end-to-end and integration tests for auth, upload -> ingest -> query, delete, and reingestion flows. The current suite is mostly unit tests.
-- Add observability: structured request logs, metrics, tracing, and error tracking.
+- Move ingestion into durable background jobs (Redis/Celery)
+- Add production object storage instead of local filesystem
+- Expand end-to-end test coverage
+- Add observability, tracing, and metrics
+- Harden Pinecone error handling and namespace cleanup
 
 ## Key Endpoints
 
-### Authentication (`/api/v1/auth`)
-- `POST /register` - Register new user with email verification
-- `POST /login` - Get JWT access token + refresh token
-- `POST /refresh` - Refresh expired access token
-- `POST /verify-email` - Verify email with token
+### Authentication
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/verify-email`
 
-### Projects (`/api/v1/projects`)
-- `GET /` - List user's projects
-- `POST /` - Create new project
-- `GET /{id}` - Get project details
-- `PATCH /{id}` - Update project
-- `DELETE /{id}` - Delete project
+### Projects
+- `GET /api/v1/projects`
+- `POST /api/v1/projects`
+- `GET /api/v1/projects/{id}`
+- `PATCH /api/v1/projects/{id}`
+- `DELETE /api/v1/projects/{id}`
 
-### Documents (`/api/v1/documents`)
-- `POST /upload` - Upload documents to project
-- `GET /{id}` - Get document metadata & status
-- `GET /{id}/download` - Download original document file
-- `DELETE /{id}` - Remove document
+### Documents
+- `POST /api/v1/documents/upload`
+- `GET /api/v1/documents/{id}`
+- `GET /api/v1/documents/{id}/download`
+- `DELETE /api/v1/documents/{id}`
 
-### Query (`/api/v1/query`)
-- `POST /` - Submit natural language query with RAG
-- `GET /history` - Retrieve past query history
+### Query
+- `POST /api/v1/query`
+- `GET /api/v1/query/history`
 
-### Chat Sessions (`/api/v1/chat`)
-- `POST /sessions` - Create new chat session
-- `PATCH /sessions/{id}` - Update session (rename, archive)
-- `GET /sessions` - List active sessions
-- `DELETE /sessions/{id}` - Delete session
+### Chat
+- `POST /api/v1/chat/sessions`
+- `PATCH /api/v1/chat/sessions/{id}`
+- `GET /api/v1/chat/sessions`
+- `DELETE /api/v1/chat/sessions/{id}`
